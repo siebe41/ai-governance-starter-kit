@@ -1,8 +1,5 @@
 # AI Adoption & Governance Starter Kit
 
-> **Companion Repository for the MMS Midway Session:**  
-> *"Curtailing the Chaos: Setting Your Org Up for AI Success"*
-
 A production-ready reference architecture and toolset for enterprise IT teams looking to deploy governed, scalable AI execution patterns—from local developer environments to Azure cloud infrastructure.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
