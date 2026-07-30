@@ -2,7 +2,6 @@
 
 > **Version:** 1.0.0  
 > **Target Audience:** IT Leadership, Systems Engineers, CISO/Security Teams, Product Owners  
-> **Companion Session:** *Curtailing the Chaos: Setting Your Org Up for AI Success* (MMS Midway)
 
 ---
 
