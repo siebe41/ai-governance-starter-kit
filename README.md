@@ -156,8 +156,8 @@ docker-compose up -d
 
 ## 📚 Community & Presentation Resources
 
-* 📜 **[Governance Playbook](https://www.google.com/search?q=./docs/governance-playbook.md):** Sample policies for internal AI adoption teams.
-* 📐 **[Architecture Reference](https://www.google.com/search?q=./docs/architecture-diagrams.md):** Visio/Draw.io compatible diagrams for internal corporate presentations.
+* 📜 **[Governance Playbook](/docs/governance-playbook.md):** Sample policies for internal AI adoption teams.
+* 📐 **[Architecture Reference](/docs/architecture-diagrams.md):** Visio/Draw.io compatible diagrams for internal corporate presentations.
 
 
 
