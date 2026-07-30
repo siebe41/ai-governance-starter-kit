@@ -83,7 +83,7 @@ v
 
 1. **Clone the Repository:**
    ```bash
-   git clone [https://github.com/YOUR_USERNAME/ai-governance-starter-kit.git](https://github.com/YOUR_USERNAME/ai-governance-starter-kit.git)
+   git clone [https://github.com/siebe41/ai-governance-starter-kit.git](https://github.com/YOUR_USERNAME/ai-governance-starter-kit.git)
    cd ai-governance-starter-kit
 
 ```
