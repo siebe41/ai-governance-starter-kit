@@ -222,6 +222,10 @@ Beyond the baseline security/coding/testing guardrails, `global/agents/` and `gl
 | **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
 | **Caveman Mode** | Prompt | `global/prompts/caveman-mode.md` | Optional terse, low-token communication style (lite/default/ultra) for an assistant's own interim narration — never applied to code correctness or user-facing deliverables. |
 
+**Suggested order for a new feature:** run **Spec-Driven Development** to produce `specs/` + `IMPLEMENTATION_PLAN.md` → hand that to **Ralph** (sequential loop) or **Swarm** (independent parallel units) to implement → layer **Caveman Mode** on top of either if you want terser status narration along the way.
+
+Step-by-step usage instructions (setup, invocation, and when to prefer which pattern) live in [`global/agents/readme.md`](/global/agents/readme.md) and [`global/prompts/readme.md`](/global/prompts/readme.md) — this table is the index, not the how-to.
+
 ---
 
 ## 🧠 Mistakes & Learnings Log

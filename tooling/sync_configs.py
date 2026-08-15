@@ -108,6 +108,8 @@ def build_vscode_target(dest_dir: Path, prompt_sources: list[Path]):
     for source in prompt_sources:
         if source.exists() and source.is_dir():
             for prompt_file in source.glob("*.md"):
+                if prompt_file.stem.lower() == "readme":
+                    continue
                 shutil.copy(prompt_file, prompts_dest / prompt_file.name)
                 print(f"  [+] Copied VS Code Prompt: {prompt_file.name}")
 
@@ -120,6 +122,8 @@ def build_copilot_target(dest_dir: Path, agent_sources: list[Path]):
     for source in agent_sources:
         if source.exists() and source.is_dir():
             for item in source.glob("*.*"):
+                if item.stem.lower() == "readme":
+                    continue
                 shutil.copy(item, copilot_dir / item.name)
                 print(f"  [+] Copied Copilot Agent: {item.name}")
 
