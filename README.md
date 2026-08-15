@@ -211,6 +211,19 @@ Secrets (e.g., Azure DevOps PATs or GitHub Tokens) are injected using standard e
 
 ---
 
+## 🧩 Included Workflow Methodologies
+
+Beyond the baseline security/coding/testing guardrails, `global/agents/` and `global/prompts/` package a few opt-in agentic workflow patterns engineers can select via the sync menu or by wiring the prompt/agent file into their tool of choice:
+
+| Methodology | Type | File | Summary |
+| :--- | :--- | :--- | :--- |
+| **Ralph Wiggum** | Agent | `global/agents/ralph-wiggum.yml` | Autonomous loop-driven builder, based on the [Ralph Wiggum technique](https://github.com/fstandhartinger/ralph-wiggum): each invocation reads specs, implements one task, verifies acceptance criteria, commits, and signals `<promise>DONE</promise>`. |
+| **Swarm** | Agents | `global/agents/swarm-orchestrator.yml`, `global/agents/swarm-worker.yml` | Orchestrator decomposes a feature into independent, non-overlapping units of work and dispatches them to isolated Swarm Workers running in parallel branches/worktrees; Orchestrator owns the merge. |
+| **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
+| **Caveman Mode** | Prompt | `global/prompts/caveman-mode.md` | Optional terse, low-token communication style (lite/default/ultra) for an assistant's own interim narration — never applied to code correctness or user-facing deliverables. |
+
+---
+
 ## 🧠 Mistakes & Learnings Log
 
 `global/instructions/03-learnings-log.md` requires AI assistants to read a per-repo `LEARNINGS.md` file before starting work, and to append to it whenever they're corrected or hit a non-obvious gotcha — so the same mistake never has to be corrected twice.
