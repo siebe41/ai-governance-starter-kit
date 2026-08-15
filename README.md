@@ -217,12 +217,13 @@ Beyond the baseline security/coding/testing guardrails, `global/agents/` and `gl
 
 | Methodology | Type | File | Summary |
 | :--- | :--- | :--- | :--- |
-| **Ralph Wiggum** | Agent | `global/agents/ralph-wiggum.yml` | Autonomous loop-driven builder, based on the [Ralph Wiggum technique](https://github.com/fstandhartinger/ralph-wiggum): each invocation reads specs, implements one task, verifies acceptance criteria, commits, and signals `<promise>DONE</promise>`. |
-| **Swarm** | Agents | `global/agents/swarm-orchestrator.yml`, `global/agents/swarm-worker.yml` | Orchestrator decomposes a feature into independent, non-overlapping units of work and dispatches them to isolated Swarm Workers running in parallel branches/worktrees; Orchestrator owns the merge. |
+| **Ralph Wiggum** | Agent | `global/agents/ralph-wiggum.yml` | Solo autonomous loop-driven builder, based on the [Ralph Wiggum technique](https://github.com/fstandhartinger/ralph-wiggum): each invocation reads specs, implements one task, verifies acceptance criteria, commits, and signals `<promise>DONE</promise>`. |
+| **Swarm** | Agents | `global/agents/foreman.yml`, `swarm-scout.yml`, `swarm-builder.yml`, `swarm-auditor.yml` | Foreman decomposes a feature into independent, non-overlapping units of work and dispatches each to a Scout (research), Builder (implement), or Auditor (review/test) sub-agent running in its own branch/worktree; Foreman owns the merge. |
+| **Ralph Swarm** | Agents | `global/agents/foreman.yml`, `global/agents/ralph-swarm-runner.yml` | Foreman partitions a large `IMPLEMENTATION_PLAN.md` across several parallel Ralph loops; each Runner claims tasks off the shared plan to avoid collisions, and the Foreman reconciles/merges as runners signal done. |
 | **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
 | **Caveman Mode** | Prompt | `global/prompts/caveman-mode.md` | Optional terse, low-token communication style (lite/default/ultra) for an assistant's own interim narration — never applied to code correctness or user-facing deliverables. |
 
-**Suggested order for a new feature:** run **Spec-Driven Development** to produce `specs/` + `IMPLEMENTATION_PLAN.md` → hand that to **Ralph** (sequential loop) or **Swarm** (independent parallel units) to implement → layer **Caveman Mode** on top of either if you want terser status narration along the way.
+**Suggested order for a new feature:** run **Spec-Driven Development** to produce `specs/` + `IMPLEMENTATION_PLAN.md` → hand that to **Ralph** (small, sequential plans), **Ralph Swarm** (large plans with independent tasks), or **Foreman + Scout/Builder/Auditor** (work that splits by function rather than by task) to implement → layer **Caveman Mode** on top of any of them if you want terser status narration along the way.
 
 Step-by-step usage instructions (setup, invocation, and when to prefer which pattern) live in [`global/agents/readme.md`](/global/agents/readme.md) and [`global/prompts/readme.md`](/global/prompts/readme.md) — this table is the index, not the how-to.
 
