@@ -10,6 +10,23 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ---
 
+## [1.2.0]
+
+### Added
+- **Per-project include/exclude selection.** Every sync now writes `.ai-governance.json` at the target repo root (domain templates + an `exclude` list per category); a saved selection is reused on future syncs without re-prompting, `--templates` on the CLI always overrides it, and `--reconfigure` discards it and re-selects from scratch.
+- **"Bring your own" local overrides.** `.ai-governance.json`'s `local_dirs` lets a project register its own folders (e.g. `governance-local/instructions/`, `governance-local/skills/`) that get merged into the sync alongside canonical `global/` assets, so project-specific additions survive re-vendoring the kit via subtree/submodule updates without touching vendored files.
+- **`global/skills/` category** and a new `.claude/skills/<name>/` deployment target (`build_skills_target()`) for Claude Code's native Skills system — skills are folders (`SKILL.md` + optional `scripts/`), copied and excluded by folder name rather than filename.
+- `global/skills/test-driven-development/`, `using-git-worktrees/`, `finishing-a-development-branch/` — adapted from [obra/superpowers](https://github.com/obra/superpowers) (MIT, © Jesse Vincent), credited in each file.
+
+### Fixed
+- `global/skills/readme.md` now documents the full skill roster, including the pre-existing `caveman`/`caveman-commit`/`caveman-review`/`caveman-help`/`compress`/`caveman-compress` family (commit `1e9ccd9`) that a `global/skills/` folder scan missed during this release's planning — cross-referenced against `global/prompts/caveman-mode.md`, which now points Claude Code users at the richer, self-triggering `global/skills/caveman/` instead.
+
+### Known Limitations
+- Excluding an already-deployed asset doesn't retroactively delete the file a previous sync wrote — `sync_configs.py` only adds/updates, it doesn't prune. Documented in the main `README.md`.
+- `global/skills/compress/` and `global/skills/caveman-compress/` are near-duplicates (same rules, different script-path resolution) — left as-is pending a maintainer decision on which is canonical.
+
+---
+
 ## [1.1.0]
 
 ### Added

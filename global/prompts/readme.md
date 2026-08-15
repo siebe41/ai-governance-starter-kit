@@ -10,7 +10,7 @@ This folder contains task-specific system prompt templates designed to enforce c
 * **`generate-unit-tests.md`**: Structured prompt forcing AI assistants to write isolated unit tests following the AAA pattern.
 * **`refactor-clean-code.md`**: Clean code refactoring instructions that preserve public function signatures while reducing complexity.
 * **`spec-driven-development.md`**: Specify → Plan → Tasks → Implement workflow, keeping the spec as the source of truth throughout implementation.
-* **`caveman-mode.md`**: Optional terse, low-token communication style (lite/default/ultra) for interim narration during long sessions.
+* **`caveman-mode.md`**: Optional terse, low-token communication style (lite/default/ultra) for interim narration during long sessions. Copilot/VS Code equivalent of `global/skills/caveman/` (which self-triggers on Claude Code and covers more intensity levels — prefer it there).
 
 ---
 

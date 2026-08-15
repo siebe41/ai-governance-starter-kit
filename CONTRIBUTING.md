@@ -10,7 +10,7 @@ This repository is the canonical source of truth for your org's AI tooling rules
 | :--- | :--- | :--- |
 | `global/instructions/` | Non-negotiable guardrails (security, coding, testing, the learnings-log protocol) | Governance sign-off (security/platform lead) — these are mandatory for every synced project. |
 | `global/mcp/mcp-servers.json` | Approved MCP servers | Governance sign-off — this is the org's "approved tools" allowlist. |
-| `global/agents/`, `global/prompts/` | Opt-in agent roles and prompt templates | Standard code review — these are selectable, not mandatory. |
+| `global/agents/`, `global/prompts/`, `global/skills/` | Opt-in agent roles, prompt templates, and Claude Skills | Standard code review — these are selectable/excludable per project, not mandatory. |
 | `templates/<Domain>/` | Domain-specific overlays (Cloud, UI, DevOps, ...) | Owned by the relevant domain team; standard code review. |
 | `tooling/` | The deployment engine itself | Standard code review **plus** a local dry-run before merging — every downstream project depends on this working correctly. |
 
@@ -25,8 +25,11 @@ This repository is the canonical source of truth for your org's AI tooling rules
 2. **Bump the version.** Update `VERSION` and add an entry to `CHANGELOG.md` for any change under `global/`, `templates/`, or `tooling/sync_configs.py`. Patch for wording/doc fixes, minor for additive instructions/agents/prompts/templates, major for anything that changes an existing file path, output format, or breaks a downstream project's assumptions.
 3. **New agent role:** add it to `global/agents/readme.md`'s role list *and* its "How to Use" section — an agent with no usage docs isn't done.
 4. **New prompt template:** add it to `global/prompts/readme.md` the same way.
-5. **New domain template:** add a `templates/<Domain>/readme.md` describing what it overlays and why, so `get_available_templates()` picking it up is self-explanatory to whoever selects it.
-6. **Changes to `global/instructions/`:** double-check the wording still reads as a rule an AI assistant will actually follow — imperative, unambiguous, testable — not a description of a rule.
+5. **New skill:** add it to `global/skills/readme.md` the same way — see that file's "Adding Your Own Skill" section for the `SKILL.md` frontmatter contract.
+6. **New domain template:** add a `templates/<Domain>/readme.md` describing what it overlays and why, so `get_available_templates()` picking it up is self-explanatory to whoever selects it.
+7. **Changes to `global/instructions/`:** double-check the wording still reads as a rule an AI assistant will actually follow — imperative, unambiguous, testable — not a description of a rule.
+
+If a change should be optional per-project rather than universal, it belongs under `global/` where it can be excluded via `.ai-governance.json` (see the main `README.md`) — it does not need its own domain template just to be skippable.
 
 ---
 

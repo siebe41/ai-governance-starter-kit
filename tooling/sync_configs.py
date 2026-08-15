@@ -4,12 +4,16 @@ Multi-Target AI Configuration Deployment Engine
 Author: Andrew J. Siebert (@Siebe41)
 
 Merges core `global/` AI assets with dynamic domain templates (`templates/<domain>`)
-and builds target configs for .github, .vscode, and .copilot.
+and builds target configs for .github, CLAUDE.md, .vscode, .copilot, and .claude/skills.
+
+Selection is persisted per target repo in `.ai-governance.json`: which domain
+templates are active, which individual instructions/prompts/agents/skills are
+excluded, and which project-local folders should be merged in as "bring your
+own" additions. See CATEGORIES below for the fixed set of asset categories.
 """
 
 import argparse
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -25,6 +29,9 @@ REPO_ROOT = SCRIPT_DIR.parent
 GLOBAL_DIR = REPO_ROOT / "global"
 TEMPLATES_DIR = REPO_ROOT / "templates"
 
+CONFIG_FILENAME = ".ai-governance.json"
+CATEGORIES = ("instructions", "prompts", "agents", "skills")
+
 
 def get_kit_version() -> str:
     """Reads the starter kit's own VERSION file, stamped into every generated output."""
@@ -39,6 +46,42 @@ def get_available_templates() -> list[str]:
     if not TEMPLATES_DIR.exists():
         return []
     return sorted([d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir()])
+
+
+def _empty_category_map() -> dict[str, list[str]]:
+    return {category: [] for category in CATEGORIES}
+
+
+def load_selection_config(output_dir: Path) -> dict | None:
+    """Loads a target repo's saved include/exclude/local-dirs selection, if one exists."""
+    config_file = output_dir / CONFIG_FILENAME
+    if not config_file.exists():
+        return None
+
+    try:
+        data = json.loads(config_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"⚠️  Could not parse {CONFIG_FILENAME} ({e}). Ignoring saved selection.")
+        return None
+
+    # Backfill missing keys so a hand-edited or older config stays forward-compatible.
+    config = {
+        "version": 1,
+        "templates": data.get("templates", []),
+        "exclude": {**_empty_category_map(), **data.get("exclude", {})},
+        "local_dirs": {**_empty_category_map(), **data.get("local_dirs", {})},
+    }
+    return config
+
+
+def save_selection_config(output_dir: Path, config: dict):
+    """Persists the resolved selection so future syncs reuse it without re-prompting."""
+    config_file = output_dir / CONFIG_FILENAME
+    config_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"  [+] Saved selection to {CONFIG_FILENAME} — edit `exclude` to drop individual "
+        f"assets, or `local_dirs` to add your own, then re-run the sync."
+    )
 
 
 def prompt_user_template_selection(available: list[str]) -> list[str]:
@@ -70,7 +113,7 @@ def prompt_user_template_selection(available: list[str]) -> list[str]:
 
     raw_choices = user_input.replace(",", " ").split()
     selected_templates = []
-    
+
     for choice in raw_choices:
         if choice.isdigit():
             val = int(choice)
@@ -86,12 +129,15 @@ def prompt_user_template_selection(available: list[str]) -> list[str]:
     return selected_templates
 
 
-def collect_markdown_files(sources: list[Path]) -> str:
-    """Combines all markdown instructions into a single unified stream."""
+def collect_markdown_files(sources: list[Path], exclude: set[str] = frozenset()) -> str:
+    """Combines all markdown instructions into a single unified stream, skipping excluded files."""
+    exclude_lower = {name.lower() for name in exclude}
     combined_content = []
     for source in sources:
         if source.exists() and source.is_dir():
             for file_path in sorted(source.glob("*.md")):
+                if file_path.name.lower() in exclude_lower:
+                    continue
                 header = f"\n\n<!-- === Source: {file_path.name} === -->\n\n"
                 combined_content.append(header + file_path.read_text(encoding="utf-8"))
     return "".join(combined_content).strip()
@@ -101,7 +147,7 @@ def build_github_target(dest_dir: Path, combined_instructions: str):
     """Builds .github/ target configuration (Copilot Instructions)."""
     github_dir = dest_dir / ".github"
     github_dir.mkdir(parents=True, exist_ok=True)
-    
+
     copilot_file = github_dir / "copilot-instructions.md"
     copilot_file.write_text(combined_instructions, encoding="utf-8")
     print(f"  [+] Generated: {copilot_file.relative_to(dest_dir) if dest_dir in copilot_file.parents else copilot_file}")
@@ -114,39 +160,68 @@ def build_claude_target(dest_dir: Path, combined_instructions: str):
     print(f"  [+] Generated: {claude_file.relative_to(dest_dir) if dest_dir in claude_file.parents else claude_file}")
 
 
-def build_vscode_target(dest_dir: Path, prompt_sources: list[Path]):
+def build_vscode_target(dest_dir: Path, prompt_sources: list[Path], exclude: set[str] = frozenset()):
     """Builds .vscode/ target configuration (Prompts and Workspace Settings)."""
     vscode_dir = dest_dir / ".vscode"
     prompts_dest = vscode_dir / "prompts"
     prompts_dest.mkdir(parents=True, exist_ok=True)
+    exclude_lower = {name.lower() for name in exclude}
 
     for source in prompt_sources:
         if source.exists() and source.is_dir():
             for prompt_file in source.glob("*.md"):
                 if prompt_file.stem.lower() == "readme":
                     continue
+                if prompt_file.name.lower() in exclude_lower:
+                    continue
                 shutil.copy(prompt_file, prompts_dest / prompt_file.name)
                 print(f"  [+] Copied VS Code Prompt: {prompt_file.name}")
 
 
-def build_copilot_target(dest_dir: Path, agent_sources: list[Path]):
+def build_copilot_target(dest_dir: Path, agent_sources: list[Path], exclude: set[str] = frozenset()):
     """Builds .copilot/ target configuration for custom agent definitions."""
     copilot_dir = dest_dir / ".copilot" / "agents"
     copilot_dir.mkdir(parents=True, exist_ok=True)
+    exclude_lower = {name.lower() for name in exclude}
 
     for source in agent_sources:
         if source.exists() and source.is_dir():
             for item in source.glob("*.*"):
                 if item.stem.lower() == "readme":
                     continue
+                if item.name.lower() in exclude_lower:
+                    continue
                 shutil.copy(item, copilot_dir / item.name)
                 print(f"  [+] Copied Copilot Agent: {item.name}")
+
+
+def build_skills_target(dest_dir: Path, skill_sources: list[Path], exclude: set[str] = frozenset()):
+    """Builds .claude/skills/<name>/ for Claude Code's native Skills system.
+
+    Unlike prompts/agents (single files), each skill is a folder — SKILL.md plus
+    any co-located reference files — so exclusion and copying operate on the
+    folder name, and each skill folder is copied wholesale.
+    """
+    skills_dir = dest_dir / ".claude" / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    exclude_lower = {name.lower() for name in exclude}
+
+    for source in skill_sources:
+        if source.exists() and source.is_dir():
+            for skill_folder in sorted(p for p in source.iterdir() if p.is_dir()):
+                if skill_folder.name.lower() in exclude_lower:
+                    continue
+                dest_folder = skills_dir / skill_folder.name
+                if dest_folder.exists():
+                    shutil.rmtree(dest_folder)
+                shutil.copytree(skill_folder, dest_folder)
+                print(f"  [+] Copied Claude Skill: {skill_folder.name}/")
 
 
 def build_mcp_targets(dest_dir: Path):
     """Deploys global MCP server configurations to client-specific directories."""
     mcp_source = GLOBAL_DIR / "mcp" / "mcp-servers.json"
-    
+
     if not mcp_source.exists():
         print("  [!] No global mcp-servers.json found. Skipping MCP deployment.")
         return
@@ -156,12 +231,12 @@ def build_mcp_targets(dest_dir: Path):
     # 1. VS Code Target (.vscode/mcp.json)
     vscode_mcp_dir = dest_dir / ".vscode"
     vscode_mcp_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Ensures compatibility with VS Code MCP schema
     vscode_mcp_config = {
         "servers": mcp_data.get("mcpServers", mcp_data.get("servers", {}))
     }
-    
+
     vscode_mcp_file = vscode_mcp_dir / "mcp.json"
     vscode_mcp_file.write_text(json.dumps(vscode_mcp_config, indent=2), encoding="utf-8")
     print(f"  [+] Generated VS Code MCP Config: {vscode_mcp_file.relative_to(dest_dir) if dest_dir in vscode_mcp_file.parents else vscode_mcp_file}")
@@ -169,7 +244,7 @@ def build_mcp_targets(dest_dir: Path):
     # 2. Copilot Agent / Generic Target (.copilot/mcp.json)
     copilot_mcp_dir = dest_dir / ".copilot"
     copilot_mcp_dir.mkdir(parents=True, exist_ok=True)
-    
+
     copilot_mcp_file = copilot_mcp_dir / "mcp.json"
     copilot_mcp_file.write_text(json.dumps(mcp_data, indent=2), encoding="utf-8")
     print(f"  [+] Generated Copilot Agent MCP Config: {copilot_mcp_file.relative_to(dest_dir) if dest_dir in copilot_mcp_file.parents else copilot_mcp_file}")
@@ -193,15 +268,34 @@ def build_learnings_log_target(dest_dir: Path):
     print(f"  [+] Seeded: {dest_file.relative_to(dest_dir) if dest_dir in dest_file.parents else dest_file}")
 
 
-def sync(selected_templates: list[str], output_dir: Path):
+def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, available_templates: list[str]):
     """Main execution pipeline."""
     print(f"\n🚀 Starting AI Configuration Sync...")
     print(f"📍 Target Output: {output_dir.resolve()}")
+
+    saved_config = None if reconfigure else load_selection_config(output_dir)
+    templates_explicit = cli_templates is not None
+
+    if templates_explicit:
+        selected_templates = cli_templates
+    elif saved_config is not None:
+        selected_templates = saved_config["templates"]
+        print(
+            f"ℹ️  Reusing saved template selection from {CONFIG_FILENAME} "
+            f"(pass --templates to change it, or --reconfigure to re-select from scratch)."
+        )
+    else:
+        selected_templates = prompt_user_template_selection(available_templates)
+
+    exclude = saved_config["exclude"] if saved_config else _empty_category_map()
+    local_dirs_cfg = saved_config["local_dirs"] if saved_config else _empty_category_map()
+
     print(f"🎨 Selected Templates: {', '.join(selected_templates) if selected_templates else 'None (Global Only)'}\n")
 
     instruction_paths = [GLOBAL_DIR / "instructions"]
     prompt_paths = [GLOBAL_DIR / "prompts"]
     agent_paths = [GLOBAL_DIR / "agents"]
+    skill_paths = [GLOBAL_DIR / "skills"]
 
     for tmpl in selected_templates:
         tmpl_path = TEMPLATES_DIR / tmpl
@@ -211,15 +305,25 @@ def sync(selected_templates: list[str], output_dir: Path):
         instruction_paths.append(tmpl_path / "instructions")
         prompt_paths.append(tmpl_path / "prompts")
         agent_paths.append(tmpl_path / "agents")
+        skill_paths.append(tmpl_path / "skills")
+
+    # "Bring your own": project-local folders (outside this vendored kit) layer in last,
+    # so they survive re-vendoring the canonical source via subtree/submodule updates.
+    instruction_paths += [output_dir / d for d in local_dirs_cfg["instructions"]]
+    prompt_paths += [output_dir / d for d in local_dirs_cfg["prompts"]]
+    agent_paths += [output_dir / d for d in local_dirs_cfg["agents"]]
+    skill_paths += [output_dir / d for d in local_dirs_cfg["skills"]]
 
     # 1. Gather combined markdown instructions, stamped with the source kit's version
     #    so a downstream repo can tell which version of the org's rules it's running.
     version_header = (
         f"<!-- Generated by ai-governance-starter-kit v{get_kit_version()} — "
-        f"do not edit directly; edit global/ (and any selected templates/) "
-        f"and re-run tooling/sync_configs.py -->\n"
+        f"do not edit directly; edit global/ (and any selected templates/ or "
+        f"local_dirs/) and re-run tooling/sync_configs.py -->\n"
     )
-    combined_instructions = version_header + "\n" + collect_markdown_files(instruction_paths)
+    combined_instructions = version_header + "\n" + collect_markdown_files(
+        instruction_paths, exclude=set(exclude["instructions"])
+    )
 
     # 2. Deploy Target Configurations
     print("📦 Deploying .github Configuration...")
@@ -229,10 +333,13 @@ def sync(selected_templates: list[str], output_dir: Path):
     build_claude_target(output_dir, combined_instructions)
 
     print("\n📦 Deploying .vscode Configuration...")
-    build_vscode_target(output_dir, prompt_paths)
+    build_vscode_target(output_dir, prompt_paths, exclude=set(exclude["prompts"]))
 
     print("\n📦 Deploying .copilot Configuration...")
-    build_copilot_target(output_dir, agent_paths)
+    build_copilot_target(output_dir, agent_paths, exclude=set(exclude["agents"]))
+
+    print("\n📦 Deploying Claude Skills...")
+    build_skills_target(output_dir, skill_paths, exclude=set(exclude["skills"]))
 
     print("\n📦 Deploying Global MCP Servers...")
     build_mcp_targets(output_dir)
@@ -240,14 +347,21 @@ def sync(selected_templates: list[str], output_dir: Path):
     print("\n📦 Seeding Learnings Log...")
     build_learnings_log_target(output_dir)
 
+    save_selection_config(output_dir, {
+        "version": 1,
+        "templates": selected_templates,
+        "exclude": exclude,
+        "local_dirs": local_dirs_cfg,
+    })
+
     print("\n✅ AI Configuration Sync Completed Successfully!\n")
 
 
 def main():
     available = get_available_templates()
-    
+
     parser = argparse.ArgumentParser(
-        description="Sync and build multi-target AI configurations for .github, .vscode, and .copilot."
+        description="Sync and build multi-target AI configurations for .github, CLAUDE.md, .vscode, .copilot, and .claude/skills."
     )
     parser.add_argument(
         "-t", "--templates",
@@ -261,16 +375,16 @@ def main():
         default=str(REPO_ROOT),
         help="Target repository directory to output configs into (defaults to repo root)."
     )
+    parser.add_argument(
+        "--reconfigure",
+        action="store_true",
+        help=f"Ignore any saved {CONFIG_FILENAME} in the output directory and re-run interactive "
+             f"template selection from scratch, overwriting it. Excludes/local_dirs are reset to empty."
+    )
 
     args = parser.parse_args()
 
-    # Trigger interactive menu if no --templates flag is passed
-    if args.templates is None:
-        selected = prompt_user_template_selection(available)
-    else:
-        selected = args.templates
-
-    sync(selected, Path(args.output))
+    sync(args.templates, Path(args.output), args.reconfigure, available)
 
 
 if __name__ == "__main__":
