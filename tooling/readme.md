@@ -11,6 +11,7 @@ This directory contains automation scripts that compile vendor-agnostic assets i
   * Copies prompts to `.vscode/prompts/`.
   * Copies agent roles to `.copilot/agents/`.
   * Formats and outputs global MCP server configs to `.vscode/mcp.json` and `.copilot/mcp.json`.
+  * Seeds a `LEARNINGS.md` mistakes/gotchas log at the target repo root — only if one doesn't already exist, so accumulated entries are never overwritten by a re-sync.
 
 ---
 

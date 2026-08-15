@@ -68,7 +68,8 @@ ai-governance-starter-kit/
 │   ├── instructions/          # 00-security-governance.md, 01-coding-standards.md, etc.
 │   ├── prompts/               # code-review.md, generate-unit-tests.md, refactor.md
 │   ├── agents/                # coordinator.yml, validator.yml, researcher.yml
-│   └── mcp/                   # mcp-servers.json (Central MCP server registry)
+│   ├── mcp/                   # mcp-servers.json (Central MCP server registry)
+│   └── LEARNINGS.template.md  # Seed file for the per-repo mistakes/learnings log
 │
 ├── templates/                 # 🎨 DOMAIN-SPECIFIC OVERLAYS
 │   ├── Cloud/                 # Cloud/Azure-specific rules and prompts
@@ -207,6 +208,15 @@ python tooling/sync_configs.py --templates Cloud DevOps --output /path/to/target
 Model Context Protocol (MCP) server definitions are centrally managed in `global/mcp/mcp-servers.json`. During synchronization, the script formats and deploys these definitions directly into `.vscode/mcp.json` and `.copilot/mcp.json`.
 
 Secrets (e.g., Azure DevOps PATs or GitHub Tokens) are injected using standard environment variable placeholders (e.g., `${AZURE_DEVOPS_PAT}`), keeping credentials safely out of source control.
+
+---
+
+## 🧠 Mistakes & Learnings Log
+
+`global/instructions/03-learnings-log.md` requires AI assistants to read a per-repo `LEARNINGS.md` file before starting work, and to append to it whenever they're corrected or hit a non-obvious gotcha — so the same mistake never has to be corrected twice.
+
+* On sync, `global/LEARNINGS.template.md` is seeded as `LEARNINGS.md` at the target repo root — but only if that file doesn't already exist, so accumulated entries survive re-syncs.
+* Entries follow a fixed `Context` / `Mistake / Gotcha` / `Correct Pattern` format, kept short enough to act as a pre-flight checklist rather than a changelog.
 
 ---
 

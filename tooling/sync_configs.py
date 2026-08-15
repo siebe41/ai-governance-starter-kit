@@ -156,6 +156,24 @@ def build_mcp_targets(dest_dir: Path):
     print(f"  [+] Generated Copilot Agent MCP Config: {copilot_mcp_file.relative_to(dest_dir) if dest_dir in copilot_mcp_file.parents else copilot_mcp_file}")
 
 
+def build_learnings_log_target(dest_dir: Path):
+    """Seeds LEARNINGS.md at the target repo root, without ever overwriting an existing log."""
+    dest_file = dest_dir / "LEARNINGS.md"
+
+    if dest_file.exists():
+        print(f"  [i] LEARNINGS.md already exists — leaving accumulated entries untouched.")
+        return
+
+    template_source = GLOBAL_DIR / "LEARNINGS.template.md"
+    if not template_source.exists():
+        print("  [!] No LEARNINGS.template.md found in global/. Skipping learnings log seed.")
+        return
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(template_source, dest_file)
+    print(f"  [+] Seeded: {dest_file.relative_to(dest_dir) if dest_dir in dest_file.parents else dest_file}")
+
+
 def sync(selected_templates: list[str], output_dir: Path):
     """Main execution pipeline."""
     print(f"\n🚀 Starting AI Configuration Sync...")
@@ -190,6 +208,9 @@ def sync(selected_templates: list[str], output_dir: Path):
 
     print("\n📦 Deploying Global MCP Servers...")
     build_mcp_targets(output_dir)
+
+    print("\n📦 Seeding Learnings Log...")
+    build_learnings_log_target(output_dir)
 
     print("\n✅ AI Configuration Sync Completed Successfully!\n")
 
