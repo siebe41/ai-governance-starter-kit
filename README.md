@@ -7,6 +7,8 @@ A production-ready reference architecture and modular configuration framework de
 ![Architecture](https://img.shields.io/badge/Architecture-Single--Source--of--Truth-orange)
 ![Protocol](https://img.shields.io/badge/Standard-MCP%20Enabled-green)
 
+**New here?** → [`QUICKSTART.md`](/QUICKSTART.md) has the fast path for both a technical lead onboarding one project and an IT admin rolling this out org-wide. Proposing a change? → [`CONTRIBUTING.md`](/CONTRIBUTING.md) covers the review bar per path, and [`CHANGELOG.md`](/CHANGELOG.md) / `VERSION` track what's shipped.
+
 ---
 
 ## 🎯 Purpose & Architecture Overview
