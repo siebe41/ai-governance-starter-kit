@@ -78,9 +78,9 @@ ai-governance-starter-kit/
 │   └── LEARNINGS.template.md  # Seed file for the per-repo mistakes/learnings log
 │
 ├── templates/                 # 🎨 DOMAIN-SPECIFIC OVERLAYS
-│   ├── Cloud/                 # Cloud/Azure-specific rules and prompts
-│   ├── UI/                    # Frontend/UI-specific rules and prompts
-│   └── DevOps/                # Pipeline/CI-CD specific rules and prompts
+│   ├── UI/                    # Populated: instructions/a11y.md (WCAG 2.2 AA)
+│   ├── Cloud/                 # Not yet populated — pattern only
+│   └── DevOps/                # Not yet populated — pattern only
 │
 └── tooling/                   # 🛠️ DEPLOYMENT ENGINE
 └── sync_configs.py        # Python sync engine (interactive menu & CLI)
@@ -256,7 +256,7 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
 
 ## 🧠 Included Skills
 
-`global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: `test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch` (all adapted from `obra/superpowers`, MIT licensed, credited in each file). Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+`global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from `obra/superpowers`, MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
 
 ---
 
@@ -277,10 +277,11 @@ Beyond the baseline security/coding/testing guardrails, `global/agents/` and `gl
 | **Ralph Wiggum** | Agent | `global/agents/ralph-wiggum.yml` | Solo autonomous loop-driven builder, based on the [Ralph Wiggum technique](https://github.com/fstandhartinger/ralph-wiggum): each invocation reads specs, implements one task, verifies acceptance criteria, commits, and signals `<promise>DONE</promise>`. |
 | **Swarm** | Agents | `global/agents/foreman.yml`, `swarm-scout.yml`, `swarm-builder.yml`, `swarm-auditor.yml` | Foreman decomposes a feature into independent, non-overlapping units of work and dispatches each to a Scout (research), Builder (implement), or Auditor (review/test) sub-agent running in its own branch/worktree; Foreman owns the merge. |
 | **Ralph Swarm** | Agents | `global/agents/foreman.yml`, `global/agents/ralph-swarm-runner.yml` | Foreman partitions a large `IMPLEMENTATION_PLAN.md` across several parallel Ralph loops; each Runner claims tasks off the shared plan to avoid collisions, and the Foreman reconciles/merges as runners signal done. |
+| **AI Team** | Agents / Skill | `global/agents/ai-team-producer.yml`, `ai-team-dev.yml`, `ai-team-qa.yml`, `global/skills/ai-team-orchestration/` | A small persistent team (Producer coordinates + merges, Dev implements, QA optionally tests) running Plan → Implement → Test → optional review/QA → Merge, with a project brief and sprint-plan template for durable cross-session context. |
 | **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
 | **Caveman Mode** | Prompt / Skill | `global/prompts/caveman-mode.md`, `global/skills/caveman/` (+ `caveman-commit`, `caveman-review`, `caveman-help`, `compress`) | Optional terse, low-token communication style — never applied to code correctness or user-facing deliverables. The `global/skills/` family self-triggers on Claude Code with commit/review/compress variants; the prompt covers Copilot/VS Code, which have no Skills system to self-trigger from. |
 
-**Suggested order for a new feature:** run **Spec-Driven Development** to produce `specs/` + `IMPLEMENTATION_PLAN.md` → hand that to **Ralph** (small, sequential plans), **Ralph Swarm** (large plans with independent tasks), or **Foreman + Scout/Builder/Auditor** (work that splits by function rather than by task) to implement → layer **Caveman Mode** on top of any of them if you want terser status narration along the way.
+**Suggested order for a new feature:** run **Plan** or **Spec-Driven Development** to produce a strategy (and, for Spec-Driven, `specs/` + `IMPLEMENTATION_PLAN.md`) → hand that to **Ralph** (small, sequential plans), **Ralph Swarm** (large plans with independent tasks), **Foreman + Scout/Builder/Auditor** (work that splits by function), or the **AI Team** (a persistent team for a whole feature or project) to implement → layer **Caveman Mode** on top of any of them if you want terser status narration along the way.
 
 Step-by-step usage instructions (setup, invocation, and when to prefer which pattern) live in [`global/agents/readme.md`](/global/agents/readme.md) and [`global/prompts/readme.md`](/global/prompts/readme.md) — this table is the index, not the how-to.
 
@@ -292,6 +293,7 @@ Step-by-step usage instructions (setup, invocation, and when to prefer which pat
 
 * On sync, `global/LEARNINGS.template.md` is seeded as `LEARNINGS.md` at the target repo root — but only if that file doesn't already exist, so accumulated entries survive re-syncs.
 * Entries follow a fixed `Context` / `Mistake / Gotcha` / `Correct Pattern` format, kept short enough to act as a pre-flight checklist rather than a changelog.
+* On Claude Code, `global/skills/learnings-log/` enforces this as a self-triggering Skill (fires at task start and right after a correction) instead of relying on the instructions file being noticed inside a large concatenated `CLAUDE.md`.
 
 ---
 

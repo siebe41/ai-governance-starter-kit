@@ -10,6 +10,26 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ---
 
+## [1.3.0]
+
+### Added
+- `global/skills/learnings-log/` — self-triggering Claude Code Skill enforcement of the mistakes/learnings protocol (reads `LEARNINGS.md` at task start, appends after a correction/gotcha), complementing `global/instructions/03-learnings-log.md` for tools without a Skills system.
+- **AI Team agent pattern**: `global/agents/ai-team-producer.yml`, `ai-team-dev.yml`, `ai-team-qa.yml` plus `global/skills/ai-team-orchestration/` (with project-brief, sprint-plan, and brainstorm-format references) — a small persistent team with real merge authority and proportional process, distinct from the single-shot Coordinator-Worker pattern.
+- `global/agents/plan.yml` — standalone strategic-planning agent (think first, code later); pairs with any implementation pattern.
+- `global/agents/se-technical-writer.yml` — documentation/blog/tutorial/ADR/user-guide specialist with a template per content type.
+- `global/skills/acquire-codebase-knowledge/` — maps an existing codebase into seven evidence-based docs under `docs/codebase/`, with a bundled read-only Python scan script and templates.
+- `global/instructions/04-context-engineering.md` — universal project-structure guidance for AI-assistant legibility (applies regardless of vendor).
+- `templates/UI/instructions/a11y.md` — WCAG 2.2 AA accessibility standards (38+ anti-patterns, framework-specific fixes) — the first populated domain template, and a template for `templates/readme.md`'s global-vs-domain rule of thumb.
+- All of the above adapted from the `awesome-copilot.github.com` catalog (agent/instruction/skill pages named by the maintainer), credited by source URL in each file.
+
+### Changed
+- `global/agents/readme.md` restructured with a "Which Pattern Should I Use?" table now that there are 4 patterns (Coordinator-Worker, AI Team, Swarm, Ralph) plus 2 standalone specialists (Plan, Technical Writer) — several overlap in purpose and the right choice depends on how work partitions.
+
+### Declined
+- `awesome-copilot`'s `ai-ready` skill was evaluated and deliberately not vendored: its entire function is instructing the user to install a third-party skill at runtime (`/skills add johnpapa/ai-ready`), which conflicts with this kit's own "No Untrusted Dependencies" rule (`00-security-governance.md`) and duplicates what `tooling/sync_configs.py` already does natively. See `global/skills/readme.md` for the full reasoning.
+
+---
+
 ## [1.2.0]
 
 ### Added

@@ -6,6 +6,13 @@ This folder contains [Claude Code Skills](https://github.com/obra/superpowers) �
 
 ## 📄 Included Skills
 
+### Governance protocol
+* **`learnings-log/`**: Self-triggering enforcement of the mistakes/gotchas protocol — reads `LEARNINGS.md` at the start of every task, and appends to it immediately after a correction or a non-obvious gotcha. See `global/instructions/03-learnings-log.md` for the full protocol this enforces.
+
+### Team & codebase orchestration
+* **`ai-team-orchestration/`**: Bootstraps the `ai-team-producer`/`ai-team-dev`/`ai-team-qa` agents into a working Plan → Implement → Test → optional review/QA → Merge loop, with reference templates for a project brief, sprint plan, and brainstorm format. See `global/agents/readme.md`'s "AI Team pattern" for the agent roles this coordinates.
+* **`acquire-codebase-knowledge/`**: Maps an existing codebase into seven evidence-based docs (`STACK.md`, `STRUCTURE.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `INTEGRATIONS.md`, `TESTING.md`, `CONCERNS.md`) under `docs/codebase/`. Ships a Python scan script (`scripts/scan.py`, stdlib-only, read-only — file/manifest detection plus `git log`/churn) and templates for each doc. Every claim must trace to a file, config, or terminal output; unknowns get `[TODO]`, team-intent questions get `[ASK USER]`.
+
 ### Caveman family — terse, token-efficient communication
 * **`caveman/`**: Ultra-compressed response mode (lite/full/ultra + wenyan variants). Self-triggers on "caveman mode", "less tokens", "be brief", or `/caveman`. This is the Claude-native counterpart to `global/prompts/caveman-mode.md` — prefer this skill on Claude Code, since it self-triggers and covers more intensity levels; the prompt exists for Copilot/VS Code, which have no native Skills system to self-trigger from.
 * **`caveman-commit/`**: Terse Conventional Commits messages — subject ≤50 chars, body only when the "why" isn't obvious.
@@ -19,6 +26,12 @@ This folder contains [Claude Code Skills](https://github.com/obra/superpowers) �
 * **`finishing-a-development-branch/`**: Verifies tests, then presents merge/PR/keep-as-is options and waits for a decision — never guesses whether to merge or discard.
 
 The three engineering-discipline skills are adapted from [obra/superpowers](https://github.com/obra/superpowers) (MIT License, © Jesse Vincent) — condensed and re-worded to match this kit's tone, with source and license credited at the bottom of each `SKILL.md`.
+
+---
+
+## 🚫 Deliberately Not Included: `ai-ready`
+
+[awesome-copilot's `ai-ready` skill](https://awesome-copilot.github.com/skill/ai-ready/) is a thin wrapper whose entire job is telling the user to run `/skills add johnpapa/ai-ready` — installing a ~600-line, frequently-changing skill from a third-party repo at runtime. This kit's own `00-security-governance.md` says "No Untrusted Dependencies: Do not introduce third-party packages or libraries without verifying their license and security posturing" — vendoring a wrapper whose function is "auto-install an unreviewed external skill" would violate that rule from inside the kit that states it. It's also redundant: `ai-ready`'s stated purpose (generate `AGENTS.md`/`copilot-instructions.md`/CI config customized to your stack) is what `tooling/sync_configs.py` already does, natively and reviewed, for this kit. If you specifically want the upstream `johnpapa/ai-ready` skill, install it directly per its own instructions — just know it sits outside this kit's review process.
 
 ---
 

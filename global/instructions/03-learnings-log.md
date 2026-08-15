@@ -53,3 +53,7 @@ Keep entries short and actionable — this file is a checklist for future sessio
 ## 🚀 Deployment Behavior
 
 During deployment (`python tooling/sync_configs.py`), an empty `LEARNINGS.md` template is seeded at the target repository root **only if one does not already exist**, so accumulated learnings are never overwritten by re-running the sync.
+
+## 🧠 Claude Code: Prefer the Skill
+
+On Claude Code, `global/skills/learnings-log/` enforces this same protocol as a self-triggering Skill — it fires at the start of every task and immediately after a correction, rather than depending on this instructions file being remembered inside a large concatenated `CLAUDE.md`. This instructions file remains the enforcement mechanism for Copilot/VS Code, which have no Skills system to self-trigger from.

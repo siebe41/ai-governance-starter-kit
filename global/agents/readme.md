@@ -1,25 +1,51 @@
 # 🤖 Multi-Agent Definitions
 
-This folder contains YAML definitions establishing specialized agent roles for multi-agent workflows: a Coordinator-Worker pattern for sequential decomposition, and a Foreman-led swarm pattern (including a parallel "Ralph Swarm") for independent, parallel execution.
+This folder contains YAML definitions establishing specialized agent roles across four workflow patterns, plus two standalone specialists. See "Which Pattern Should I Use?" below before picking one — several of these overlap in purpose and the right choice depends on how the work actually partitions.
 
 ---
 
 ## 📄 Agent Roles
 
-### Coordinator-Worker pattern
+### Coordinator-Worker pattern — sequential decomposition
 * **`coordinator.yml`**: High-level planner responsible for breaking complex feature requests into smaller sub-tasks.
 * **`validator.yml`**: Quality assurance agent auditing proposed code changes against security standards before execution.
 * **`researcher.yml`**: Read-only context gathering agent focused on exploring codebases and summarizing requirements.
 
-### Swarm pattern (Foreman + specialists)
+### AI Team pattern — a small persistent team, proportional process
+* **`ai-team-producer.yml`**: Coordinates scope, planning, Dev/QA, triage, durable project context, and merging. Never writes application code.
+* **`ai-team-dev.yml`**: Full-stack implementer — combines client/interaction, core-logic/infrastructure, and UX/polish perspectives, uses only the ones the project actually needs.
+* **`ai-team-qa.yml`**: Optional independent QA engineer — tests behavior, files reproducible bugs, verifies fixes. Never fixes application source.
+
+Bundled with `global/skills/ai-team-orchestration/`, which defines the default Plan → Implement → Test → optional review/QA → Merge workflow across these three, plus templates for a project brief, sprint plan, and brainstorm format.
+
+### Swarm pattern — independent, parallel execution
 * **`foreman.yml`**: Leader of the swarm. Decomposes work into independent units, assigns them to the specialists below (or to Ralph Swarm Runners), and owns integration/merging.
 * **`swarm-scout.yml`**: Read-only research sub-agent — investigates a unit of work before it's built.
 * **`swarm-builder.yml`**: Implementation sub-agent — builds one self-contained unit of work in its own branch/worktree.
 * **`swarm-auditor.yml`**: Review/test sub-agent — validates a Builder's completed work before the Foreman merges it.
 
-### Ralph loop pattern
+### Ralph loop pattern — autonomous, unattended
 * **`ralph-wiggum.yml`**: Autonomous, loop-driven builder agent based on the [Ralph Wiggum technique](https://github.com/fstandhartinger/ralph-wiggum) — reads specs, implements one task per iteration, verifies, commits, and signals completion. Runs solo/sequentially.
 * **`ralph-swarm-runner.yml`**: Parallel-safe variant of Ralph. Multiple runners execute the same loop at once, each claiming tasks off a shared `IMPLEMENTATION_PLAN.md` to avoid collisions, coordinated by the Foreman.
+
+### Standalone specialists — usable inside any pattern above
+* **`plan.yml`**: Strategic planning and architecture assistant — understands the codebase and clarifies requirements before proposing an implementation strategy. Think first, code later.
+* **`se-technical-writer.yml`**: Documentation, technical blogs, tutorials, ADRs, and user guides, with a template per content type.
+
+---
+
+## 🧭 Which Pattern Should I Use?
+
+| Situation | Use |
+| :--- | :--- |
+| One task, one agent, get a plan or a review back | **Coordinator-Worker** — lightest weight, single-shot. |
+| A small team should own a feature or a whole project lifecycle, including who has merge authority | **AI Team** — Producer has real merge/triage authority that Coordinator doesn't; proportional process (skip ceremony for small changes). |
+| Work genuinely splits into independent, non-overlapping units across a large feature | **Swarm** — parallel dispatch by function (research/build/audit), Foreman owns integration. |
+| A large, well-specified task list with no human available to babysit each step | **Ralph** (small/sequential) or **Ralph Swarm** (large/parallel) — runs unattended in a loop until done. |
+| You need deep upfront analysis before committing to an approach | **Plan** — pairs with any of the above; use it first, then hand its output to whichever pattern fits the implementation. |
+| You need docs, not code | **SE: Technical Writer** — standalone, dispatch it like any Coordinator-Worker agent. |
+
+`ai-team-qa.yml` (behavioral testing) and `validator.yml` (static code/security audit) are complementary, not redundant — QA runs the app and finds behavioral bugs, Validator reads the diff and finds compliance/security issues. Use either or both depending on the change's risk.
 
 ---
 
@@ -33,6 +59,14 @@ When synchronized via `tooling/sync_configs.py`, these YAML files are packaged i
 
 ### Coordinator / Validator / Researcher — single-shot custom agents
 Standard request/response agents. After sync, invoke them by name from your tool's agent picker (e.g. `@Coordinator` in Copilot Chat), or lift the `system_prompt:` block straight into a Claude Code subagent definition or any other tool's custom system prompt field. One invocation produces one response — no external driver needed.
+
+### AI Team: Producer / Dev / QA — a small persistent team
+1. **Adopt or start a project**: Producer reads repository instructions and current state, and — for anything beyond a trivial change — creates or updates `PROJECT_BRIEF.md` (durable cross-session context) and a short sprint plan. Templates for both ship in `global/skills/ai-team-orchestration/references/`.
+2. **Plan → Implement → Test → optional review/QA → Merge**: Producer defines the outcome, constraints, and acceptance criteria; Dev implements, self-reviews, and opens the PR; QA gets pulled in only when risk or repository policy actually warrants dedicated testing — not by default.
+3. Producer triages any QA findings back to Dev, confirms required checks/approvals, and merges per the repository's own policy.
+4. Before ending a long session, Producer updates the durable project state (plan/progress note) so a fresh session can continue with a cold-start prompt — see `global/skills/ai-team-orchestration/SKILL.md` for the exact prompt shape.
+
+Model and tool selection are deliberately left to your environment — none of the three pin a specific model or tool list, so normal trust/permission/approval controls keep applying.
 
 ### Foreman + Swarm Scout / Builder / Auditor — parallel dispatch
 1. Invoke `Foreman` once with the feature request. It returns a set of independent, non-file-overlapping unit-of-work briefs, each tagged with the specialist it needs (Scout, Builder, or Auditor).
@@ -64,6 +98,9 @@ For a large, well-specified `IMPLEMENTATION_PLAN.md` where tasks are independent
 5. Stop when every task across every runner's group is checked off and merged.
 
 Prefer plain Ralph when a plan is small enough to run sequentially without the coordination overhead; reach for Ralph Swarm when the plan is large and the tasks are genuinely independent.
+
+### Plan / SE: Technical Writer — standalone specialists
+Both are single-shot custom agents like Coordinator/Validator/Researcher — invoke by name, or lift the `system_prompt:` block into any tool's custom system prompt field. `Plan` is meant to be used *before* any of the other patterns: run it to get a concrete implementation strategy, then hand that strategy to Ralph, a Swarm brief, or a Dev/Coordinator invocation to actually build. `SE: Technical Writer` is meant to be invoked whenever the deliverable is documentation rather than code — it's not part of any implementation pattern's workflow.
 
 ---
 
