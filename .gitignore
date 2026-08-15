@@ -1,0 +1,14 @@
+# This repo is the canonical *source* of AI tooling config, not a deployment
+# target. tooling/sync_configs.py writes into the repo root by default when
+# run without --output, which would otherwise let generated deployment
+# *outputs* get committed here alongside the real source in global/.
+# See QUICKSTART.md ("What to Commit") for why real target projects should
+# commit these same paths instead of ignoring them.
+/.github/copilot-instructions.md
+/.vscode/prompts/
+/.vscode/mcp.json
+/.copilot/
+/.claude/skills/
+/CLAUDE.md
+/LEARNINGS.md
+/.ai-governance.json
