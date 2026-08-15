@@ -8,6 +8,7 @@ This directory contains automation scripts that compile vendor-agnostic assets i
 
 * **`sync_configs.py`**: Cross-platform Python deployment engine.
   * Combines markdown instructions into `.github/copilot-instructions.md`.
+  * Combines the same markdown instructions into `CLAUDE.md` at the repo root for Claude Code / Claude Agent SDK.
   * Copies prompts to `.vscode/prompts/`.
   * Copies agent roles to `.copilot/agents/`.
   * Formats and outputs global MCP server configs to `.vscode/mcp.json` and `.copilot/mcp.json`.

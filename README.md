@@ -16,7 +16,7 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
 
 ```
 
-```
+```text
                   +----------------------------------+
                   |   global/ (Canonical Source)     |
                   |  ├── instructions/               |
@@ -38,18 +38,15 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
                   |   tooling/sync_configs.py        |
                   +----------------+-----------------+
                                    |
-    +------------------------------+------------------------------+
-    |                              |                              |
-    v                              v                              v
+    +------------------+------------------+------------------+------------------+
+    |                  |                  |                  |                  |
+    v                  v                  v                  v
 
-```
-
-+---------------+              +---------------+              +---------------+
-|   .github/    |              |   .vscode/    |              |   .copilot/   |
-| (Copilot      |              | (Prompts &    |              | (Agent roles  |
-|  Instructions)|              |  MCP config)  |              |  & MCP config)|
-+---------------+              +---------------+              +---------------+
-
++---------------+  +---------------+  +---------------+  +---------------+
+|   .github/    |  |   CLAUDE.md   |  |   .vscode/    |  |   .copilot/   |
+| (Copilot      |  | (Claude Code /|  | (Prompts &    |  | (Agent roles  |
+|  Instructions)|  |  Agent SDK)   |  |  MCP config)  |  | & MCP config) |
++---------------+  +---------------+  +---------------+  +---------------+
 ```
 
 ---
@@ -164,6 +161,9 @@ Your selection: 1, 3
 📦 Deploying .github Configuration...
   [+] Generated: .github/copilot-instructions.md
 
+📦 Deploying Claude Code Configuration...
+  [+] Generated: CLAUDE.md
+
 📦 Deploying .vscode Configuration...
   [+] Copied VS Code Prompt: code-review.md
   [+] Copied VS Code Prompt: generate-unit-tests.md
@@ -175,6 +175,9 @@ Your selection: 1, 3
 📦 Deploying Global MCP Servers...
   [+] Generated VS Code MCP Config: .vscode/mcp.json
   [+] Generated Copilot Agent MCP Config: .copilot/mcp.json
+
+📦 Seeding Learnings Log...
+  [+] Seeded: LEARNINGS.md
 
 ✅ AI Configuration Sync Completed Successfully!
 

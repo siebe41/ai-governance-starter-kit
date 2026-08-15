@@ -99,6 +99,13 @@ def build_github_target(dest_dir: Path, combined_instructions: str):
     print(f"  [+] Generated: {copilot_file.relative_to(dest_dir) if dest_dir in copilot_file.parents else copilot_file}")
 
 
+def build_claude_target(dest_dir: Path, combined_instructions: str):
+    """Builds CLAUDE.md at the target repo root for Claude Code / Claude Agent SDK."""
+    claude_file = dest_dir / "CLAUDE.md"
+    claude_file.write_text(combined_instructions, encoding="utf-8")
+    print(f"  [+] Generated: {claude_file.relative_to(dest_dir) if dest_dir in claude_file.parents else claude_file}")
+
+
 def build_vscode_target(dest_dir: Path, prompt_sources: list[Path]):
     """Builds .vscode/ target configuration (Prompts and Workspace Settings)."""
     vscode_dir = dest_dir / ".vscode"
@@ -203,6 +210,9 @@ def sync(selected_templates: list[str], output_dir: Path):
     # 2. Deploy Target Configurations
     print("📦 Deploying .github Configuration...")
     build_github_target(output_dir, combined_instructions)
+
+    print("\n📦 Deploying Claude Code Configuration...")
+    build_claude_target(output_dir, combined_instructions)
 
     print("\n📦 Deploying .vscode Configuration...")
     build_vscode_target(output_dir, prompt_paths)
