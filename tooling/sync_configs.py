@@ -4,10 +4,11 @@ Multi-Target AI Configuration Deployment Engine
 Author: Andrew J. Siebert (@Siebe41)
 
 Merges core `global/` AI assets with dynamic domain templates (`templates/<domain>`)
-and builds target configs for .github, CLAUDE.md, .vscode, .copilot, and .claude/skills.
+and builds target configs for .github, CLAUDE.md, .vscode, .copilot, .claude/skills,
+and .claude/settings.json (hooks).
 
 Selection is persisted per target repo in `.ai-governance.json`: which domain
-templates are active, which individual instructions/prompts/agents/skills are
+templates are active, which individual instructions/prompts/agents/skills/hooks are
 excluded, and which project-local folders should be merged in as "bring your
 own" additions. See CATEGORIES below for the fixed set of asset categories.
 """
@@ -30,7 +31,7 @@ GLOBAL_DIR = REPO_ROOT / "global"
 TEMPLATES_DIR = REPO_ROOT / "templates"
 
 CONFIG_FILENAME = ".ai-governance.json"
-CATEGORIES = ("instructions", "prompts", "agents", "skills")
+CATEGORIES = ("instructions", "prompts", "agents", "skills", "hooks")
 
 
 def get_kit_version() -> str:
@@ -218,6 +219,71 @@ def build_skills_target(dest_dir: Path, skill_sources: list[Path], exclude: set[
                 print(f"  [+] Copied Claude Skill: {skill_folder.name}/")
 
 
+def build_hooks_target(dest_dir: Path, hook_sources: list[Path], exclude: set[str] = frozenset()):
+    """Merges global/hooks/*.json fragments into .claude/settings.json's `hooks` block.
+
+    Unlike every other category, `.claude/settings.json` is a single file a target
+    repo may already have hand-edited content in (permissions, env vars, other
+    hooks) — so this MERGES rather than overwrites: existing top-level keys are
+    left untouched, and a fragment is appended to its `hooks.<event>` array only
+    if an identical entry isn't already there (safe/idempotent to re-run).
+
+    Each fragment names one `event` (e.g. "Stop") and one `hook` object — exactly
+    the shape Claude Code expects inside `settings.json`'s `hooks.<event>` array
+    (an optional `matcher` plus a required `hooks: [...]` list of commands).
+    """
+    claude_dir = dest_dir / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    settings_file = claude_dir / "settings.json"
+    exclude_lower = {name.lower() for name in exclude}
+
+    if settings_file.exists():
+        try:
+            settings = json.loads(settings_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(
+                f"  [!] {settings_file} is not valid JSON ({e}). Skipping hook "
+                f"deployment rather than risk corrupting a hand-edited file — "
+                f"fix it and re-run."
+            )
+            return
+    else:
+        settings = {}
+
+    settings.setdefault("hooks", {})
+    merged = []
+    for source in hook_sources:
+        if not (source.exists() and source.is_dir()):
+            continue
+        for fragment_path in sorted(source.glob("*.json")):
+            if fragment_path.stem.lower() in exclude_lower:
+                continue
+            try:
+                fragment = json.loads(fragment_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                print(f"  [!] Skipping malformed hook fragment {fragment_path.name}: {e}")
+                continue
+
+            event = fragment.get("event")
+            hook_entry = fragment.get("hook")
+            if not event or not isinstance(hook_entry, dict):
+                print(f"  [!] Skipping {fragment_path.name}: missing 'event' or 'hook' object.")
+                continue
+
+            event_list = settings["hooks"].setdefault(event, [])
+            if hook_entry in event_list:
+                continue  # already present from a previous sync — no-op
+            event_list.append(hook_entry)
+            merged.append(f"{event}: {fragment.get('name', fragment_path.stem)}")
+
+    settings_file.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    if merged:
+        for entry in merged:
+            print(f"  [+] Merged hook into .claude/settings.json — {entry}")
+    else:
+        print("  [i] .claude/settings.json hooks already up to date.")
+
+
 def build_mcp_targets(dest_dir: Path):
     """Deploys global MCP server configurations to client-specific directories."""
     mcp_source = GLOBAL_DIR / "mcp" / "mcp-servers.json"
@@ -296,6 +362,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
     prompt_paths = [GLOBAL_DIR / "prompts"]
     agent_paths = [GLOBAL_DIR / "agents"]
     skill_paths = [GLOBAL_DIR / "skills"]
+    hook_paths = [GLOBAL_DIR / "hooks"]
 
     for tmpl in selected_templates:
         tmpl_path = TEMPLATES_DIR / tmpl
@@ -306,6 +373,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
         prompt_paths.append(tmpl_path / "prompts")
         agent_paths.append(tmpl_path / "agents")
         skill_paths.append(tmpl_path / "skills")
+        hook_paths.append(tmpl_path / "hooks")
 
     # "Bring your own": project-local folders (outside this vendored kit) layer in last,
     # so they survive re-vendoring the canonical source via subtree/submodule updates.
@@ -313,6 +381,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
     prompt_paths += [output_dir / d for d in local_dirs_cfg["prompts"]]
     agent_paths += [output_dir / d for d in local_dirs_cfg["agents"]]
     skill_paths += [output_dir / d for d in local_dirs_cfg["skills"]]
+    hook_paths += [output_dir / d for d in local_dirs_cfg["hooks"]]
 
     # 1. Gather combined markdown instructions, stamped with the source kit's version
     #    so a downstream repo can tell which version of the org's rules it's running.
@@ -341,6 +410,9 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
     print("\n📦 Deploying Claude Skills...")
     build_skills_target(output_dir, skill_paths, exclude=set(exclude["skills"]))
 
+    print("\n📦 Deploying Claude Code Hooks...")
+    build_hooks_target(output_dir, hook_paths, exclude=set(exclude["hooks"]))
+
     print("\n📦 Deploying Global MCP Servers...")
     build_mcp_targets(output_dir)
 
@@ -361,7 +433,7 @@ def main():
     available = get_available_templates()
 
     parser = argparse.ArgumentParser(
-        description="Sync and build multi-target AI configurations for .github, CLAUDE.md, .vscode, .copilot, and .claude/skills."
+        description="Sync and build multi-target AI configurations for .github, CLAUDE.md, .vscode, .copilot, .claude/skills, and .claude/settings.json (hooks)."
     )
     parser.add_argument(
         "-t", "--templates",
