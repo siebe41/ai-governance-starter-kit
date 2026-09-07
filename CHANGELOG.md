@@ -10,7 +10,7 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ---
 
-## [1.4.0]
+## [1.5.0]
 
 ### Added
 - **`hooks` as a fifth canonical asset category**, alongside `instructions`/`prompts`/`agents`/`skills`. A hook is what turns a "the model should always do X" `global/instructions/` rule into something the harness enforces outside model context (a Claude Code [hook](https://docs.claude.com/en/docs/claude-code/hooks)), rather than something that depends on the model remembering a written instruction on every turn.
@@ -21,6 +21,16 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ### Changed
 - `README.md`: folder hierarchy, architecture diagram, CLI walkthrough transcript, and the Include/Exclude & Bring Your Own section all updated for the new category; added a "Global Hooks" section alongside "Included Skills"/"Global MCP Integration".
+
+---
+
+## [1.4.0]
+
+### Added
+- `graft` entry in `global/mcp/mcp-servers.json` — [trailhq/Graft](https://github.com/trailhq/Graft) (`@nanonets/graft`, MIT), an MCP server that serves a local tree-sitter-built codebase graph to any MCP-capable agent. Requires no secret, contacts no service by default, and only activates in a project once a developer runs `npx graft init` there — see `README.md`'s "Global MCP Integration" section and `global/skills/readme.md`'s `acquire-codebase-knowledge` entry for how the two compare.
+
+### Declined
+- [affaan-m/ECC](https://github.com/affaan-m/ECC) ("Everything Claude Code") was evaluated alongside Graft and deliberately not vendored. On inspection the hook/install code itself wasn't malicious (hooks require an explicit `--enable-hooks` flag; the sampled hook scripts — governance-capture, observe-runner, cost-tracker, desktop-notify — made no network calls), but: its claimed ~250k GitHub stars are implausible for a repo of this age/niche and consistent with fake-star inflation; an independent audit found its own virality has already produced a malware-dropper clone in the wild; and it is a ~9,000-file, 68-agent, 286-skill bundle from a single maintainer shipping weekly, hooking nearly every tool call. That combination of unverifiable popularity, adjacent malware risk, and unauditable surface area conflicts with this kit's own `00-security-governance.md` "No Untrusted Dependencies" rule and its "curated, single source of truth" design — same reasoning class as the `ai-ready` decline in `[1.3.0]`, at much larger scale. If a specific ECC skill/agent/rule is wanted later, cherry-pick and hand-review that one file rather than vendoring the bundle.
 
 ---
 
