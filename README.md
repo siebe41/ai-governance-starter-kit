@@ -266,6 +266,8 @@ Model Context Protocol (MCP) server definitions are centrally managed in `global
 
 Secrets (e.g., Azure DevOps PATs or GitHub Tokens) are injected using standard environment variable placeholders (e.g., `${AZURE_DEVOPS_PAT}`), keeping credentials safely out of source control.
 
+**`graft`** ([trailhq/Graft](https://github.com/trailhq/Graft), published as `@nanonets/graft`, MIT) is a codebase-context server: it serves a local, tree-sitter-built knowledge graph of a repo to any MCP-capable agent. It needs no secret and calls no external service by default — evaluated and vendored on that basis (see `CHANGELOG.md`). The entry alone only makes the tool *available*; it does nothing in a project until a developer opts in by running `npx graft init` there once, which builds the local graph and (on Claude Code) additionally wires its own skill, hooks, and statusline — none of which this kit vendors, since `graft init` manages that file directly. It's a heavier, LLM-optional alternative to `global/skills/acquire-codebase-knowledge/`'s stdlib-only scan — reach for `acquire-codebase-knowledge` when you want a zero-dependency one-time snapshot, and `graft` when you want a living, auto-refreshing graph with deeper agent integration.
+
 ---
 
 ## 🧩 Included Workflow Methodologies
