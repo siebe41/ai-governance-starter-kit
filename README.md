@@ -25,6 +25,7 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
                   |  ├── prompts/                    |
                   |  ├── agents/                     |
                   |  ├── skills/                     |
+                  |  ├── hooks/                      |
                   |  └── mcp/                        |
                   +----------------+-----------------+
                                    |
@@ -49,6 +50,8 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
 |   .github/    |  |   CLAUDE.md   |  |   .vscode/    |  |   .copilot/   |
 | (Copilot      |  |  .claude/     |  | (Prompts &    |  | (Agent roles  |
 |  Instructions)|  |  skills/      |  |  MCP config)  |  | & MCP config) |
+|               |  |  settings.json|  |               |  |               |
+|               |  |  (hooks)      |  |               |  |               |
 +---------------+  +---------------+  +---------------+  +---------------+
 
 Every deploy is governed by a per-repo `.ai-governance.json`: which domain
@@ -74,6 +77,7 @@ ai-governance-starter-kit/
 │   ├── prompts/               # code-review.md, generate-unit-tests.md, refactor.md
 │   ├── agents/                # coordinator.yml, validator.yml, researcher.yml
 │   ├── skills/                # test-driven-development/, using-git-worktrees/, ...
+│   ├── hooks/                 # lint-before-finish.json (Stop/PostToolUse hook fragments)
 │   ├── mcp/                   # mcp-servers.json (Central MCP server registry)
 │   └── LEARNINGS.template.md  # Seed file for the per-repo mistakes/learnings log
 │
@@ -185,6 +189,9 @@ Your selection: 1, 3
   [+] Copied Claude Skill: test-driven-development/
   [+] Copied Claude Skill: using-git-worktrees/
 
+📦 Deploying Claude Code Hooks...
+  [+] Merged hook into .claude/settings.json — Stop: lint-before-finish
+
 📦 Deploying Global MCP Servers...
   [+] Generated VS Code MCP Config: .vscode/mcp.json
   [+] Generated Copilot Agent MCP Config: .copilot/mcp.json
@@ -232,19 +239,21 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
     "instructions": [],
     "prompts": ["caveman-mode.md"],
     "agents": ["ralph-swarm-runner.yml"],
-    "skills": []
+    "skills": [],
+    "hooks": []
   },
   "local_dirs": {
     "instructions": ["governance-local/instructions"],
     "prompts": [],
     "agents": [],
-    "skills": ["governance-local/skills"]
+    "skills": ["governance-local/skills"],
+    "hooks": []
   }
 }
 ```
 
-* **`exclude`** — filenames (or, for `skills`, folder names) to skip on every future sync. Nothing here is deleted from `global/`; it's just not deployed to *this* project. Edit the list, re-run `python tooling/sync_configs.py` (no flags needed — it reuses this file), done.
-* **`local_dirs`** — extra folders, relative to your project root, merged in alongside the canonical `global/` assets for each category. Drop a `governance-local/instructions/04-team-conventions.md` or `governance-local/skills/my-skill/SKILL.md` in your own project, list the parent folder here, and it deploys on every sync exactly like a canonical asset — including through `--exclude` if you ever want to turn it off. Because these files live outside the vendored `vendor/ai-governance/` (or wherever you cloned the kit), they survive `git subtree pull`/`submodule update` without merge conflicts.
+* **`exclude`** — filenames (or, for `skills`, folder names; for `hooks`, the fragment's filename stem, e.g. `lint-before-finish`) to skip on every future sync. Nothing here is deleted from `global/`; it's just not deployed to *this* project. Edit the list, re-run `python tooling/sync_configs.py` (no flags needed — it reuses this file), done.
+* **`local_dirs`** — extra folders, relative to your project root, merged in alongside the canonical `global/` assets for each category. Drop a `governance-local/instructions/04-team-conventions.md` or `governance-local/skills/my-skill/SKILL.md` in your own project, list the parent folder here, and it deploys on every sync exactly like a canonical asset — including through `--exclude` if you ever want to turn it off. Because these files live outside the vendored `vendor/ai-governance/` (or wherever you cloned the kit), they survive `git subtree pull`/`submodule update` without merge conflicts. `hooks` fragments deploy the same way, except the target is a merge into `.claude/settings.json` rather than a directory copy — see [`global/hooks/readme.md`](/global/hooks/readme.md) for exactly how that merge behaves and why excluding a hook doesn't retroactively strip it from a `settings.json` a previous sync already wrote to (same "Known limitation" as below).
 * **`--reconfigure`** — ignore a saved `.ai-governance.json` and re-run template selection from scratch (also resets `exclude`/`local_dirs` to empty; hand-edit them back in if you still want them).
 * Passing `--templates` explicitly on the command line always wins over a saved selection, for CI/automation use.
 
@@ -257,6 +266,12 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
 ## 🧠 Included Skills
 
 `global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from `obra/superpowers`, MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+
+---
+
+## 🪝 Global Hooks
+
+`global/hooks/` ships [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — the mechanism for turning a "the model should always do X" instruction into something the harness enforces outside model context, rather than something a model has to remember on every turn. Shipped today: `lint-before-finish` (a `Stop` hook that blocks finishing on a dirty tree until `npm run lint` passes). Unlike every other category, deployment here is a merge into a target repo's `.claude/settings.json` rather than a directory copy — full behavior, the security note on vendoring shell commands, and how to add your own in [`global/hooks/readme.md`](/global/hooks/readme.md).
 
 ---
 

@@ -9,6 +9,7 @@
 /.vscode/mcp.json
 /.copilot/
 /.claude/skills/
+/.claude/settings.json
 /CLAUDE.md
 /LEARNINGS.md
 /.ai-governance.json

@@ -11,6 +11,7 @@ This repository is the canonical source of truth for your org's AI tooling rules
 | `global/instructions/` | Non-negotiable guardrails (security, coding, testing, the learnings-log protocol) | Governance sign-off (security/platform lead) — these are mandatory for every synced project. |
 | `global/mcp/mcp-servers.json` | Approved MCP servers | Governance sign-off — this is the org's "approved tools" allowlist. |
 | `global/agents/`, `global/prompts/`, `global/skills/` | Opt-in agent roles, prompt templates, and Claude Skills | Standard code review — these are selectable/excludable per project, not mandatory. |
+| `global/hooks/` | Claude Code hook fragments merged into a target repo's `.claude/settings.json` | Standard code review **plus** the reviewer must read the command in full and confirm it does only what its `description` claims — this is the one category whose assets execute shell commands rather than only being read by a model. See `global/hooks/readme.md`'s security note. |
 | `templates/<Domain>/` | Domain-specific overlays (Cloud, UI, DevOps, ...) | Owned by the relevant domain team; standard code review. |
 | `tooling/` | The deployment engine itself | Standard code review **plus** a local dry-run before merging — every downstream project depends on this working correctly. |
 
@@ -26,6 +27,7 @@ This repository is the canonical source of truth for your org's AI tooling rules
 3. **New agent role:** add it to `global/agents/readme.md`'s role list *and* its "How to Use" section — an agent with no usage docs isn't done.
 4. **New prompt template:** add it to `global/prompts/readme.md` the same way.
 5. **New skill:** add it to `global/skills/readme.md` the same way — see that file's "Adding Your Own Skill" section for the `SKILL.md` frontmatter contract.
+5a. **New hook:** add it to `global/hooks/readme.md`'s Included Hooks list — see that file's "Adding Your Own Hook" section for the fragment contract (one `event` + one `hook` object). Before opening the PR, prove the command does what you claim (pipe a synthesized hook-input payload into it by hand) — a hook that silently does nothing, or does something other than its stated purpose, is worse than no hook.
 6. **New domain template:** add a `templates/<Domain>/readme.md` describing what it overlays and why, so `get_available_templates()` picking it up is self-explanatory to whoever selects it.
 7. **Changes to `global/instructions/`:** double-check the wording still reads as a rule an AI assistant will actually follow — imperative, unambiguous, testable — not a description of a rule.
 

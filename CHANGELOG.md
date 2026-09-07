@@ -10,6 +10,20 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ---
 
+## [1.4.0]
+
+### Added
+- **`hooks` as a fifth canonical asset category**, alongside `instructions`/`prompts`/`agents`/`skills`. A hook is what turns a "the model should always do X" `global/instructions/` rule into something the harness enforces outside model context (a Claude Code [hook](https://docs.claude.com/en/docs/claude-code/hooks)), rather than something that depends on the model remembering a written instruction on every turn.
+- `global/hooks/lint-before-finish.json` — a `Stop` hook fragment that, when the working tree has an uncommitted change, runs `npm run lint` and blocks finishing until it passes, with the lint output fed back as the reason. Silent no-op on a clean tree.
+- `global/hooks/readme.md` — category docs (deployment behavior, a security note specific to this category since it's the one whose assets execute shell commands rather than only being read by a model, and how to add your own).
+- `tooling/sync_configs.py`: `build_hooks_target()` deploys `global/hooks/*.json` fragments into a target repo's `.claude/settings.json`. Unlike every other category (a directory copy or a wholesale file rewrite), this is a **merge**: existing top-level keys and hooks already in the target's `settings.json` are preserved, a fragment already present from a prior sync is skipped (idempotent re-run), and a `settings.json` that fails to parse is left untouched with a warning rather than risked.
+- `CATEGORIES` now includes `"hooks"`, so `.ai-governance.json`'s `exclude`/`local_dirs` support it the same way as the other four categories (exclude by the fragment's filename stem; `local_dirs` for a project's own hook fragments, layered in the same merge).
+
+### Changed
+- `README.md`: folder hierarchy, architecture diagram, CLI walkthrough transcript, and the Include/Exclude & Bring Your Own section all updated for the new category; added a "Global Hooks" section alongside "Included Skills"/"Global MCP Integration".
+
+---
+
 ## [1.3.0]
 
 ### Added

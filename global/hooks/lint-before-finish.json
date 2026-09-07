@@ -1,0 +1,15 @@
+{
+  "name": "lint-before-finish",
+  "description": "Deterministically enforces a common CLAUDE.md rule ('always run lint before finishing') instead of relying on the model remembering a written instruction. Fires on Stop: if the working tree has any uncommitted change, it runs `npm run lint` and blocks finishing (with the lint output as the reason) until it passes. Silent no-op on a clean tree. Requires a package.json `lint` script and `jq` on PATH — for a non-npm stack, copy this file into your project's own aistarterfiles/global/hooks/ (or local_dirs override) and swap the `npm run lint` invocation for your stack's equivalent (e.g. `make lint`, `poetry run ruff check .`).",
+  "event": "Stop",
+  "hook": {
+    "hooks": [
+      {
+        "type": "command",
+        "command": "if [ -n \"$(git status --porcelain 2>/dev/null)\" ]; then OUTPUT=\"$(npm run lint 2>&1)\"; CODE=$?; if [ $CODE -ne 0 ]; then TRUNCATED=\"$(printf '%s' \"$OUTPUT\" | tail -c 4000)\"; MSG=\"npm run lint failed. CLAUDE.md requires this to pass before finishing any code change. Fix the errors below, then finish again.\n\n$TRUNCATED\"; jq -n --arg reason \"$MSG\" '{decision:\"block\", reason:$reason}'; fi; fi",
+        "timeout": 180,
+        "statusMessage": "Running npm run lint (CLAUDE.md requires this before finishing)…"
+      }
+    ]
+  }
+}
