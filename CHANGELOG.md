@@ -10,6 +10,13 @@ Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bum
 
 ---
 
+## [1.5.1]
+
+### Fixed
+- `global/mcp/mcp-servers.json`'s `graft` entry now pins an exact version (`@nanonets/graft@0.16.0` instead of the unpinned `@nanonets/graft`) — flagged by an AgentShield (`ecc-agentshield`) security scan run against a project synced from this kit: an unpinned `npx -y` package auto-installs whatever is newest at MCP-server-launch time, so a future compromised publish to that package would run automatically. The other three entries (`azure-devops`, `github`, `filesystem`) have the same unpinned-`npx` shape and were flagged too, but are illustrative placeholders an org is expected to replace with its own approved servers — not fixed here for that reason. Left `-y` in place rather than removing it (AgentShield's other suggestion): Claude Code launches MCP servers non-interactively, and `npx` without `-y` would have no TTY to prompt, likely hanging or failing the server outright — pinning the version already closes the "arbitrary future publish" gap `-y` was flagged for. Also considered and declined: adding an explicit `env: {}` block to strip inherited environment variables (AgentShield's third suggestion) — Claude Code's documented MCP config behavior treats `env` as additive to the inherited environment, not a replacement, so an empty block would likely be a no-op at best and, if that assumption is wrong for a given host, could strip `PATH` and break `npx` itself. Left as an open question rather than guessed at.
+
+---
+
 ## [1.5.0]
 
 ### Added
