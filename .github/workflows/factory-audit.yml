@@ -1,0 +1,203 @@
+# Ember-style software factory — scheduled audits.
+#
+# The factory's second intake path. The conductor drains a queue; something has
+# to fill it. An audit is a recurring, read-only sweep over one dimension of the
+# repo (security, accessibility, SEO, dependencies, documentation drift) whose
+# only output is **issues**, filed with the queue label.
+#
+# That indirection is the whole design. An audit that fixed what it found would
+# be an unsupervised refactor of your codebase along an axis nobody asked about
+# this week; an audit that files issues puts every finding through the same
+# admission control, budget, and human review as any other work — and lets you
+# read the finding before a line changes. It also means an audit is cheap: one
+# read-only pass, no build, no test run.
+#
+# Every audit ships `enabled: false`. Turn on one, watch what it files for a
+# cycle, then turn on the next.
+
+name: Factory Audit
+
+on:
+  schedule:
+    # One cron per audit would need one file per audit; instead this fires daily
+    # and each audit's own `cron` field in .factory.json decides whether today is
+    # its day. The cost of a no-op tick is a few seconds of a hosted runner.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      audit:
+        description: "Run one audit now, ignoring its schedule"
+        required: true
+        type: choice
+        options: [security, accessibility, seo, dependencies, docs-drift]
+      dry_run:
+        description: "Report findings in the job summary without filing issues"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  select:
+    runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    outputs:
+      audits: ${{ steps.due.outputs.audits }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Which audits are due
+        id: due
+        env:
+          FORCED: ${{ inputs.audit }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { loadConfig } from './.factory/scripts/ledger.mjs';
+            const c = loadConfig();
+            const forced = process.env.FORCED;
+            if (!c.enabled) { console.log('audits=[]'); process.exit(0); }
+            if (forced) {
+              const spec = (c.audits || {})[forced];
+              // A forced run bypasses the schedule but NOT the enable flag —
+              // otherwise the workflow_dispatch dropdown becomes a way to run an
+              // audit the repo deliberately switched off.
+              console.log('audits=' + JSON.stringify(spec?.enabled ? [forced] : []));
+              process.exit(0);
+            }
+            // Day-of-week match only: this workflow fires once daily, so the
+            // hour and minute fields of an audit's cron are documentation.
+            const dow = new Date().getUTCDay();
+            const due = Object.entries(c.audits || {})
+              .filter(([, spec]) => spec.enabled)
+              .filter(([, spec]) => {
+                const field = String(spec.cron || '').split(/\s+/)[4] ?? '*';
+                if (field === '*') return true;
+                return field.split(',').some((part) => {
+                  const [lo, hi] = part.split('-').map(Number);
+                  return hi === undefined ? lo === dow : dow >= lo && dow <= hi;
+                });
+              })
+              .map(([name]) => name);
+            console.log('audits=' + JSON.stringify(due));
+          " >> "$GITHUB_OUTPUT"
+
+  audit:
+    needs: select
+    if: needs.select.outputs.audits != '[]'
+    strategy:
+      # Audits are independent read-only passes, but they share one
+      # subscription — running them serially keeps a five-audit day from
+      # spending the interactive reserve all at once.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        audit: ${{ fromJSON(needs.select.outputs.audits) }}
+    runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    env:
+      # ── Billing guard ───────────────────────────────────────────────────
+      # This factory is meant to run on a Claude *subscription*, never at API
+      # rates. claude-code-action resolves its key as
+      # `inputs.anthropic_api_key || env.ANTHROPIC_API_KEY` (action.yml), so an
+      # ANTHROPIC_API_KEY present in the environment is forwarded into the run
+      # even though this workflow never passes one — and a self-hosted runner
+      # inherits its host's environment, where such a key may well exist for
+      # something else entirely. Pinning it empty at job scope means the only
+      # credential that can reach the run is the OAuth token below.
+      ANTHROPIC_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Preflight — subscription credential and runner
+        id: preflight
+        env:
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_OAUTH" != "true" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN is not set. The factory runs on a Claude subscription, not API credit." >&2
+            echo "Generate one with \`claude setup-token\` and add it as a repository secret." >&2
+            exit 1
+          fi
+          REQUIRE_SELF_HOSTED="$(node -p "require('./.factory/factory.config.json').require_self_hosted === true || (require('fs').existsSync('.factory.json') && require('./.factory.json').require_self_hosted === true)")"
+          if [ "$REQUIRE_SELF_HOSTED" = "true" ] && [ "${{ runner.environment }}" != "self-hosted" ]; then
+            echo "::error::require_self_hosted is on, but this job landed on a ${{ runner.environment }} runner." >&2
+            echo "Set the FACTORY_RUNNER repository variable to your runner labels, e.g. [\"self-hosted\",\"nas\",\"factory\"]." >&2
+            exit 1
+          fi
+          echo "auth: subscription (OAuth) · runner: ${{ runner.environment }}"
+
+      - name: Host capacity check
+        id: host
+        run: node .factory/scripts/hostcheck.mjs
+
+      - name: Skip — host is busy
+        if: steps.host.outputs.ok != 'true'
+        run: echo "::notice::Skipping the ${{ matrix.audit }} audit — ${{ steps.host.outputs.reason }}. It will run on its next scheduled day."
+
+      - name: Resolve audit settings
+        id: spec
+        if: steps.host.outputs.ok == 'true' 
+        env:
+          AUDIT: ${{ matrix.audit }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { loadConfig } from './.factory/scripts/ledger.mjs';
+            const c = loadConfig();
+            const spec = c.audits[process.env.AUDIT];
+            console.log([
+              'max_issues=' + (spec.max_issues ?? 3),
+              'task_class=' + (spec.task_class ?? 'standard'),
+              'queue_label=' + c.queue.label,
+              'audit_label=' + c.queue.audit_label,
+              'dry_run=' + c.dry_run,
+            ].join('\n'));
+          " >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.host.outputs.ok == 'true'
+        timeout-minutes: 30
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          claude_args: |
+            --max-turns 30
+          prompt: |
+            You are the Factory Auditor running the **${{ matrix.audit }}** audit
+            on ${{ github.repository }}, unattended and on a schedule.
+
+            MAX ISSUES:  ${{ steps.spec.outputs.max_issues }}
+            TASK CLASS:  ${{ steps.spec.outputs.task_class }}
+            QUEUE LABEL: ${{ steps.spec.outputs.queue_label }}
+            AUDIT LABEL: ${{ steps.spec.outputs.audit_label }}
+            DRY RUN:     ${{ inputs.dry_run || steps.spec.outputs.dry_run }}
+
+            Follow the `factory-audit` skill in `.claude/skills/factory-audit/`.
+            It defines what each audit dimension covers, the evidence bar a
+            finding has to clear before it becomes an issue, and how to check
+            for duplicates.
+
+            The rules that matter most, restated because this prompt is the one
+            thing you are guaranteed to read:
+
+            1. **Change no code.** This is a read-only pass. Your only output is
+               issues.
+            2. **File at most MAX ISSUES.** If you find more, file the most
+               serious ones and say in the last issue's body what you left. A
+               flood of low-value issues is how this feature gets switched off.
+            3. **Search existing open issues first.** Re-filing something already
+               queued wastes the budget on work that is already scheduled.
+            4. **Every finding needs evidence** — a file path and line, and a
+               concrete statement of what goes wrong. "Consider improving X" is
+               not a finding. If you cannot point at the code, do not file it.
+            5. **If you find nothing, file nothing** and say so. A clean audit is
+               a real and useful result.

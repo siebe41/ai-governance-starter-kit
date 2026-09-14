@@ -1,0 +1,27 @@
+{
+  "_comment": "Factory settings for this repo. Layers over global/factory/factory.config.json (the kit's own defaults); unset keys fall through to it. The deployed engine lives in .factory/ and the workflows in .github/workflows/factory-*.yml -- both are MIRRORS of global/factory/ and global/workflows/, same canonical-source pattern as .claude/skills/ mirroring global/skills/. Change global/, then re-deploy; never edit the mirror. Full guide: docs/factory-playbook.md.",
+
+  "enabled": true,
+  "_comment_dry_run": "Stays true until a few conductor ticks have been read and judged sensible. Turning it off is the decision to let this thing open pull requests unattended -- make it deliberately.",
+  "dry_run": true,
+
+  "_comment_runner": "The factory runs on the WSL2 pool on the Windows desktop (runner-kit-1 / runner-kit-2, labels self-hosted+factory+wsl). Set the FACTORY_RUNNER repository variable to [\"self-hosted\",\"factory\"]. require_self_hosted then fails a job that lands on a GitHub-hosted runner instead of quietly spending Actions minutes.",
+  "require_self_hosted": true,
+
+  "_comment_budget": "Deliberately lower than a single-repo default would be: this subscription also backs HockeyManagerPortal's factory and a human at a terminal, and the governor's budget is PER REPO -- two repos each reserving 40% still leaves the pair able to spend more than either number suggests. Start small, read the ledger, then raise.",
+  "admission": {
+    "wip_limit": 1,
+    "max_admissions_per_tick": 1,
+    "allowed_task_classes": ["mechanical", "standard"]
+  },
+  "governor": {
+    "reserve_fraction": 0.5,
+    "window_turn_budget": 200,
+    "weekly_turn_budget": 1500
+  },
+
+  "_comment_audits": "docs-drift first, and alone. This repo IS documentation -- eight readmes, a playbook, a changelog and a README that all describe the same assets -- so drift here is both the likeliest defect and the cheapest to verify. Turn on a second audit only once this one has filed something worth acting on.",
+  "audits": {
+    "docs-drift": { "enabled": true, "cron": "0 4 * * 5", "task_class": "mechanical", "max_issues": 3 }
+  }
+}

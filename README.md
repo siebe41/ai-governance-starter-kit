@@ -287,6 +287,29 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
 
 The governor is the interesting part, and it exists because **there is no public API that reports Claude subscription (Pro/Max) usage** — the Admin API's usage and cost reports are organisation-scoped and need an Admin API key. So it keeps its own turn ledger on an orphan branch and treats a usage-limit error observed by a real run as authoritative over its own arithmetic. Its central knob is `reserve_fraction`: the share of every budget the factory refuses to spend, held back so that sitting down at a terminal in the evening finds headroom waiting rather than a limit the overnight queue already consumed. The factory is meant to use idle capacity, not to race its owner for it.
 
+### This repository runs its own factory
+
+The kit is not just the source of the factory — it is a customer of it. This repo
+carries its own deployed copy:
+
+| Path | What it is |
+| :--- | :--- |
+| `.github/workflows/factory-*.yml` | mirror of `global/workflows/` |
+| `.factory/` | mirror of `global/factory/` |
+| `.claude/skills/factory-*/` | mirror of those two skills in `global/skills/` |
+| `.factory.json` | this repo's own settings — **not** a mirror |
+
+Same canonical-source-plus-mirror pattern as `.claude/skills/` everywhere else:
+**change `global/`, then re-deploy; never edit a mirror.** The `docs-drift` audit
+is the one enabled here, which is fitting — a repo that is mostly documentation
+about its own assets is exactly where a claim and the file it describes drift
+apart quietly.
+
+It runs with `dry_run: true`, `wip_limit: 1` and `reserve_fraction: 0.5` on a
+self-hosted runner. The budget is deliberately below what a single repo would
+take, because the governor accounts **per repo**: two repos each reserving half
+still leaves the pair able to spend more than either number suggests.
+
 The whole thing ships **inert** (`enabled: false`) — deploying it starts nothing until a repo writes its own `.factory.json`. Setup, the dry-run rollout path, tuning, audits, and what to watch for in the first weeks: [`docs/factory-playbook.md`](/docs/factory-playbook.md). Category docs: [`global/workflows/readme.md`](/global/workflows/readme.md) and [`global/factory/readme.md`](/global/factory/readme.md).
 
 ---

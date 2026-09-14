@@ -103,6 +103,29 @@ the preflight checks it.
 `factory:audit`, and optionally `factory:mechanical` / `factory:deep` to set a
 task class when filing.
 
+### 4b. Check `.claude/skills/` is actually committed
+
+The worker prompt tells Claude to follow `.claude/skills/factory-task/`. If your
+repo **gitignores** `.claude/skills/` — a reasonable thing to do when those files
+are sync output rather than source, and what this kit itself does — the runner's
+checkout will not contain the procedure the prompt just told it to read.
+
+Either commit the two factory skills as an exception:
+
+```gitignore
+/.claude/skills/*
+!/.claude/skills/factory-task/
+!/.claude/skills/factory-audit/
+```
+
+(note the `/*`: git cannot re-include a file whose parent **directory** is
+excluded, so a negation under a plain `/.claude/skills/` rule silently does
+nothing) — or accept that runs fall back to the rules restated inline in the
+workflow prompt, which are deliberately self-sufficient but much shorter than
+the skill.
+
+---
+
 ### 5. Write `.factory.json` and start in dry-run
 
 ```json
@@ -270,6 +293,14 @@ ledger and, when a run is actually refused for usage limits, records the reset
 time and holds admission until it passes. Observed limits always beat the
 estimate; when a refusal carries no parseable reset time, it falls back to
 `default_cooldown_minutes` rather than inventing one.
+
+**The budget is per repository.** Each repo has its own `.factory.json`, its own
+ledger branch and its own queue; nothing coordinates them. Two repos each set to
+`reserve_fraction: 0.4` are not jointly reserving 40% — they are two independent
+factories that can, together, spend considerably more than either number
+suggests. Running more than one against a single subscription means setting each
+lower than you would set one alone, then reading both ledgers before raising
+either.
 
 **Quiet hours** (`admission.quiet_hours_utc: [8, 9, 10]`) keep the factory out of
 the hours you actually work, if you would rather have all of your capacity then
