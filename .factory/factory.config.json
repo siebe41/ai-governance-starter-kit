@@ -16,6 +16,7 @@
     "min_free_disk_gb": 10
   },
 
+  "$comment_queue": "hold_labels match case-insensitively; an entry ending in * matches by prefix. Use the prefix form when the repo has a SECOND automation keyed on a label family (e.g. \"agent*\" where another pipeline triggers on any agent:* label) -- admitting such an issue would put two agents on one issue and race them to open competing pull requests.",
   "queue": {
     "label": "factory",
     "hold_labels": ["on-hold", "pending", "question", "discussion", "blocked", "wontfix", "needs-design"],
