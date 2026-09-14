@@ -202,6 +202,41 @@ If several runners share one physical machine, remember each sees the *whole*
 host's load, so they will defer together. That is the intent: the limit is the
 machine, not the runner.
 
+### On a Windows host (WSL2)
+
+The check reads `/proc`, so on Windows it must run inside WSL2 — and there it
+sees **the WSL VM, not Windows**. Linux-side load, `MemAvailable` and disk inside
+the VM are all read correctly; a busy Windows session on the other side of the
+hypervisor (a game, an IDE build, a browser with a hundred tabs) is invisible to
+it, and the factory will not defer for any of it.
+
+The fix is to stop treating the VM as elastic. By default WSL2 takes **50% of
+total memory and every logical processor** — so an uncapped VM and Windows are
+competing for the same machine, and neither guard can see the other. Cap it in
+`%UserProfile%\.wslconfig`:
+
+```ini
+[wsl2]
+memory=8GB
+processors=4
+swap=4GB
+```
+
+Now the VM is a fixed slice, the guard measures that slice, and protecting it is
+exactly the right semantics — Windows keeps the rest no matter what the factory
+does. Tune the numbers to what you are willing to lend it.
+
+Two WSL gotchas that will otherwise cost an evening:
+
+* **The VM shuts down when idle** (`vmIdleTimeout`, default 60 s). A runner
+  started from a terminal dies with the terminal. Run it under systemd
+  (`[boot] systemd=true` in `/etc/wsl.conf`) and enable the unit, or the factory
+  goes quiet the moment you close the window.
+* **WSL does not start at boot on its own.** Something has to launch the distro
+  after login or at startup — a Scheduled Task running `wsl -d <distro>` is the
+  usual answer. Without it, a machine that "never sleeps" still has no runner on
+  it after a Windows update reboot.
+
 ---
 
 ## 🎛️ Tuning the governor

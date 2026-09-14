@@ -26,6 +26,12 @@
  * Linux-only by design (`/proc`). Anywhere else it reports "ok" rather than
  * guessing — a check that cannot see the host must not block work on a host it
  * knows nothing about. It is a guard, not a gate.
+ *
+ * Under WSL2 this reads the WSL VM, not Windows: a busy Windows session on the
+ * other side of the hypervisor is invisible here. Cap the VM in `.wslconfig`
+ * (it takes 50% of RAM and every logical processor by default) and the reading
+ * becomes correct by construction — the VM is then a fixed slice, and guarding
+ * the slice is exactly what this should do.
  */
 
 import { existsSync, readFileSync, statfsSync } from "node:fs";
