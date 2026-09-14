@@ -387,6 +387,60 @@ busy.
 
 ---
 
+## 📈 The retro reader — and why it cannot act
+
+`factory-retro.yml` runs weekly, joins the ledger with what GitHub says happened
+to the issues the factory touched, and publishes a report (job summary plus a
+90-day artifact). Run it on demand with `workflow_dispatch`, or locally:
+
+```bash
+node .factory/scripts/retro.mjs --window-days 14
+```
+
+**It reports. It never tunes.** Its `permissions` are `contents: read` and
+`issues: read` and nothing else: it cannot edit `.factory.json`, open a pull
+request, or change a label. That is the design, not an unfinished edge. This is
+the one component holding exactly the evidence needed to argue for a bigger
+budget, more concurrency, or another audit — which is precisely why it must not
+be able to grant any of them. A loop that can widen its own limits on its own
+evidence has stopped being bounded, and it would do it sincerely, having
+correctly observed that it could be more useful with more room.
+
+So: the governor decides what may run, the retro says how that went, and **a
+person moves the numbers between the two.**
+
+### What it measures, and why those
+
+* **Merged, not "pull requests opened."** A PR nobody wanted cost exactly what a
+  wanted one cost. Only a human merge is evidence the work was worth doing, so
+  every cost-per-outcome figure divides by merges.
+* **Turns per merged PR, per task class.** The number that tells you whether a
+  class earns its allowance. A first week typically shows `mechanical` around an
+  order of magnitude cheaper per merge than `standard` — that ratio is what
+  makes a charter decidable instead of guessed.
+* **Issues that failed more than once.** The most actionable rows in the report.
+  A second failure on one issue is almost never a weaker worker; it is an issue
+  nobody has specified well enough to act on. Rewrite it or close it — do not
+  raise a budget at it.
+* **Audit signal rate** — merged ÷ decided, ignoring still-open. An audit whose
+  issues are mostly closed unmerged is spending budget and your attention to
+  produce work you then reject. Narrow its `notes`, or switch it off.
+* **Estimated-turn share.** Runs whose log could not be parsed are charged their
+  full allowance. Above 20% the report says so loudly, because a budget tuned on
+  mostly-estimated turns is tuned on a guess.
+
+### Two things it deliberately will not do
+
+* **Unknown is never failure.** An issue GitHub cannot answer for is reported as
+  unknown. Counting silence as failure would make every report pessimistic in
+  exactly the weeks the API was flaky, and a metric that lies when infrastructure
+  hiccups is worse than no metric.
+* **It does not file itself as an issue.** A weekly report that lands in the
+  issue tracker competes with the queue it is reporting on, and a bot comment
+  thread is where reports go to be ignored.
+
+---
+
 ## ✅ Verifying a change to the engine
 
 ```bash

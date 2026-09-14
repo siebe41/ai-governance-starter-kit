@@ -1,0 +1,148 @@
+# Ember-style software factory — the retro reader.
+#
+# Weekly: read the ledger, ask GitHub what actually happened to the issues the
+# factory touched, and publish a report.
+#
+# **It reports. It never tunes.** This workflow has `contents: read` and
+# `issues: read` and nothing else — it cannot edit `.factory.json`, cannot open
+# a pull request, cannot change a label. That is deliberate. It holds exactly
+# the evidence needed to argue for a bigger budget, more concurrency or another
+# audit, which is precisely why it must not be able to grant any of them. A loop
+# that can widen its own limits on its own evidence is no longer bounded, and it
+# would do it sincerely.
+#
+# The one number worth reading is **merged**, not "pull requests opened". A PR
+# nobody wanted cost the same as one they did.
+
+name: Factory Retro
+
+on:
+  schedule:
+    # Monday morning UTC — after a week of runs, before the week's planning.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "How many days to report on"
+        required: false
+        default: "7"
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  retro:
+    runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the ledger lives on another branch in this repo
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Is the factory switched on here
+        id: config
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { loadConfig } from './.factory/scripts/ledger.mjs';
+            const c = loadConfig();
+            console.log('enabled=' + c.enabled);
+            console.log('state_branch=' + c.state_branch);
+            console.log('audit_label=' + c.queue.audit_label);
+          " >> \"\$GITHUB_OUTPUT\"
+
+      - name: Gather outcomes from GitHub
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/github-script@v7
+        env:
+          STATE_BRANCH: ${{ steps.config.outputs.state_branch }}
+          AUDIT_LABEL: ${{ steps.config.outputs.audit_label }}
+          WINDOW_DAYS: ${{ inputs.window_days || '7' }}
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const fs = require('node:fs');
+
+            // Read the ledger to learn WHICH issues to ask about. Asking only
+            // about issues the factory actually touched keeps this to a handful
+            // of API calls regardless of how busy the repo is.
+            let state = { runs: [] };
+            try {
+              execFileSync('git', ['fetch', 'origin', `${process.env.STATE_BRANCH}:refs/remotes/origin/${process.env.STATE_BRANCH}`, '--force']);
+              state = JSON.parse(execFileSync('git', ['show', `origin/${process.env.STATE_BRANCH}:state.json`], { encoding: 'utf8' }));
+            } catch {
+              core.notice('No ledger branch yet — reporting an empty window.');
+            }
+
+            const cutoff = Date.now() - Number(process.env.WINDOW_DAYS) * 86400000;
+            const issueNumbers = [...new Set(
+              (state.runs ?? [])
+                .filter((r) => Date.parse(r.started_at ?? 0) >= cutoff)
+                .map((r) => r.issue)
+                .filter(Number.isFinite),
+            )];
+
+            const outcomes = {};
+            for (const number of issueNumbers) {
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: number,
+                });
+                const labels = issue.labels.map((l) => (typeof l === 'string' ? l : l.name));
+
+                // "Merged" is the only evidence a human wanted the work. Closing
+                // an issue is not enough — an issue closed as wontfix and one
+                // closed by a merged PR look identical from the issue alone, so
+                // this asks the timeline which pull requests actually merged.
+                let merged = false;
+                try {
+                  const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                    owner: context.repo.owner, repo: context.repo.repo, issue_number: number, per_page: 100,
+                  });
+                  merged = events.some(
+                    (e) => e.event === 'cross-referenced' && e.source?.issue?.pull_request?.merged_at,
+                  ) || events.some((e) => e.event === 'merged');
+                } catch (error) {
+                  core.warning(`timeline unavailable for #${number}: ${error.message}`);
+                }
+
+                outcomes[String(number)] = {
+                  closed: issue.state === 'closed',
+                  merged,
+                  from_audit: labels.includes(process.env.AUDIT_LABEL),
+                  labels,
+                };
+              } catch (error) {
+                // A deleted or inaccessible issue stays ABSENT from the map, so
+                // the report counts it as unknown rather than as a failure.
+                core.warning(`no outcome for #${number}: ${error.message}`);
+              }
+            }
+            fs.writeFileSync('factory-outcomes.json', JSON.stringify(outcomes, null, 2));
+            core.info(`gathered outcomes for ${Object.keys(outcomes).length}/${issueNumbers.length} issue(s)`);
+
+      - name: Render the retro
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          node .factory/scripts/retro.mjs \
+            --outcomes factory-outcomes.json \
+            --window-days "${{ inputs.window_days || '7' }}" \
+            --out factory-retro.md
+
+      # Kept as an artifact rather than posted as an issue or a comment: a
+      # weekly report that files itself into the issue tracker competes with the
+      # queue it is reporting on, and a bot comment thread is where reports go to
+      # be ignored. The job summary is the primary surface; this is the copy you
+      # can download and diff against last week's.
+      - name: Keep the report
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-retro
+          path: factory-retro.md
+          retention-days: 90
