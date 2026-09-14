@@ -1,0 +1,51 @@
+# 🏭 Factory Engine
+
+The dependency-free Node engine behind the three `factory-*` workflows in
+[`global/workflows/`](../workflows/readme.md). The sync tool deploys this whole
+folder to a target repo's `.factory/` whenever any of those workflows ships.
+
+Operating guide, setup and tuning: [`docs/factory-playbook.md`](../../docs/factory-playbook.md).
+
+| File | Role |
+| :--- | :--- |
+| `factory.config.json` | Kit defaults. A repo overrides any subset in its own `.factory.json` at the repo root; unset keys fall through to here. Ships `enabled: false`. |
+| `scripts/ledger.mjs` | Durable state on an orphan branch, config loading, pruning. |
+| `scripts/governor.mjs` | The admission decision. `--self-test` proves the policy. |
+| `scripts/factory.mjs` | Operator + workflow CLI: `status`, `claim`, `record`, `release`, `pause`, `resume`. `--self-test` proves the log parser. |
+
+Node 20+ stdlib only — no `npm install`, nothing to audit, nothing to keep
+patched. That is deliberate: this code runs with repository credentials on a
+schedule, and a dependency tree would be the largest thing to trust in it.
+
+## Why turns, and why a reserve
+
+There is **no public API that reports Claude subscription (Pro/Max) usage.** The
+Admin API's usage and cost reports are organisation-scoped and need an Admin API
+key; they say nothing about a seat's subscription windows. So the governor cannot
+ask how much headroom is left. It keeps its own ledger instead, and treats a
+usage-limit error observed by a real run as authoritative over its own
+arithmetic — estimate when nothing better is available, ground truth the moment
+the service provides it.
+
+Turns are the accounting unit because they are the one cost signal the runner can
+observe for every run without an API call. They are a proxy, not a meter: a
+turn's real cost varies with context size and thinking depth. Calibrate the
+budgets against what you observe in your own repo.
+
+`reserve_fraction` is the knob that matters most. The factory is meant to use
+idle capacity, not to race its owner for it — reserving a slice of every window
+means sitting down at a terminal in the evening finds headroom waiting rather
+than a limit the overnight queue already spent.
+
+## Verifying a change
+
+Both scripts carry their own assertions and need no repo, branch, or network:
+
+```bash
+node .factory/scripts/governor.mjs --self-test   # admission policy
+node .factory/scripts/factory.mjs  --self-test   # execution-log parsing
+```
+
+Run both after touching either. The governor's self-test is the specification of
+the admission policy in executable form — if you change a rule, change its
+assertion in the same commit.

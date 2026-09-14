@@ -9,6 +9,12 @@ This folder contains [Claude Code Skills](https://github.com/obra/superpowers) �
 ### Governance protocol
 * **`learnings-log/`**: Self-triggering enforcement of the mistakes/gotchas protocol — reads `LEARNINGS.md` at the start of every task, and appends to it immediately after a correction or a non-obvious gotcha. See `global/instructions/03-learnings-log.md` for the full protocol this enforces.
 
+### Autonomous factory — unattended runs
+* **`factory-task/`**: The procedure for one unattended run against a single GitHub issue. Covers scoping to the turn allowance, the two terminal outcomes (a pull request or an escalation — never a merge, never a silent no-op), honest reporting about checks that could not run, and recording durable learnings with a confidence mark before finishing.
+* **`factory-audit/`**: The procedure for a scheduled read-only audit (security, accessibility, SEO, dependencies, docs drift) whose only output is **issues**, never code changes. Defines the evidence bar a finding must clear — a location, a consequence, and a fix that fits — and the duplicate check before filing.
+
+Both are driven by the workflows in `global/workflows/` and governed by `global/instructions/05-autonomous-factory.md`. See `docs/factory-playbook.md` for how the loop fits together.
+
 ### Team & codebase orchestration
 * **`ai-team-orchestration/`**: Bootstraps the `ai-team-producer`/`ai-team-dev`/`ai-team-qa` agents into a working Plan → Implement → Test → optional review/QA → Merge loop, with reference templates for a project brief, sprint plan, and brainstorm format. See `global/agents/readme.md`'s "AI Team pattern" for the agent roles this coordinates.
 * **`acquire-codebase-knowledge/`**: Maps an existing codebase into seven evidence-based docs (`STACK.md`, `STRUCTURE.md`, `ARCHITECTURE.md`, `CONVENTIONS.md`, `INTEGRATIONS.md`, `TESTING.md`, `CONCERNS.md`) under `docs/codebase/`. Ships a Python scan script (`scripts/scan.py`, stdlib-only, read-only — file/manifest detection plus `git log`/churn) and templates for each doc. Every claim must trace to a file, config, or terminal output; unknowns get `[TODO]`, team-intent questions get `[ASK USER]`. For a living, auto-refreshing alternative instead of a one-time snapshot, see the `graft` MCP server in `global/mcp/mcp-servers.json` (opt in per-project with `npx graft init`) — README.md's "Global MCP Integration" section has the comparison.

@@ -1,0 +1,220 @@
+# Ember-style software factory — the worker.
+#
+# Runs exactly one admitted issue, under a turn allowance and a wall-clock
+# deadline, then records the outcome in the ledger. It is dispatched by the
+# conductor, never scheduled: admission control is the conductor's job, and a
+# worker that could start itself would route around the governor.
+#
+# The one rule this file exists to enforce: **nothing here merges itself.** The
+# worker opens a pull request or escalates to a human. Both are terminal; there
+# is no third outcome where work silently lands.
+
+name: Factory Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue to work"
+        required: true
+        type: string
+      task_class:
+        description: "mechanical | standard | deep"
+        required: false
+        default: standard
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  # claude-code-action mints its own GitHub token via OIDC token exchange even
+  # under claude_code_oauth_token auth; without this the step fails with
+  # "Could not fetch an OIDC token".
+  id-token: write
+
+jobs:
+  work:
+    # Runner comes from the repo variable FACTORY_RUNNER, not .factory.json —
+    # `runs-on` is evaluated before any step can read a file. Set it to a JSON
+    # string (`"ubuntu-latest"`) or a JSON array for a self-hosted pool
+    # (`["self-hosted","nas","factory"]`) to keep the work on your own hardware.
+    runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve caps for this task class
+        id: caps
+        env:
+          TASK_CLASS: ${{ inputs.task_class }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { loadConfig } from './.factory/scripts/ledger.mjs';
+            const c = loadConfig();
+            const cls = process.env.TASK_CLASS || 'standard';
+            const spec = (c.admission.task_classes || {})[cls] || {};
+            console.log([
+              'max_turns=' + (spec.max_turns ?? c.admission.max_turns),
+              'deadline_minutes=' + (spec.deadline_minutes ?? c.admission.deadline_minutes),
+              'escalated_label=' + c.queue.escalated_label,
+              'in_flight_label=' + c.queue.in_flight_label,
+              'allowed=' + (c.admission.allowed_task_classes || []).includes(cls),
+            ].join('\n'));
+          " >> "$GITHUB_OUTPUT"
+
+      - name: Refuse a task class this repo has not enabled
+        if: steps.caps.outputs.allowed != 'true'
+        run: |
+          echo "Task class '${{ inputs.task_class }}' is not in allowed_task_classes." >&2
+          exit 1
+
+      - name: Configure git identity
+        run: |
+          git config user.name "factory-worker"
+          git config user.email "factory-worker@users.noreply.github.com"
+
+      - name: Fetch the issue
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.issue_number }}'),
+            });
+            core.setOutput('title', data.title);
+            core.setOutput('body', data.body || '');
+            core.setOutput('labels', data.labels.map((l) => (typeof l === 'string' ? l : l.name)).join(', '));
+
+      # Project setup. Deliberately best-effort and non-fatal: a repo with no
+      # package.json is not a broken factory, and a failed install should reach
+      # Claude as context to work around rather than kill the run before it
+      # starts. What the run must NOT do is claim tests passed when the tooling
+      # was never there — the skill's reporting rules cover that.
+      - name: Install dependencies
+        id: deps
+        continue-on-error: true
+        run: |
+          if [ -f package-lock.json ]; then npm ci
+          elif [ -f package.json ]; then npm install
+          else echo "no package.json — skipping"; fi
+
+      - uses: anthropics/claude-code-action@v1
+        id: claude
+        timeout-minutes: ${{ fromJSON(steps.caps.outputs.deadline_minutes) }}
+        continue-on-error: true
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Without the full transcript a run that "succeeds" but does nothing is
+          # undiagnosable — you cannot tell a permission denial from a model that
+          # decided there was nothing to do.
+          show_full_output: true
+          claude_args: |
+            --max-turns ${{ steps.caps.outputs.max_turns }}
+          prompt: |
+            You are the Factory Worker, running unattended on a schedule. No
+            human has reviewed a plan first, and no human is watching this run.
+
+            REPO:       ${{ github.repository }}
+            ISSUE:      #${{ inputs.issue_number }} — ${{ steps.issue.outputs.title }}
+            LABELS:     ${{ steps.issue.outputs.labels }}
+            TASK CLASS: ${{ inputs.task_class }}
+            ALLOWANCE:  ${{ steps.caps.outputs.max_turns }} turns, ${{ steps.caps.outputs.deadline_minutes }} minutes
+            DEPS:       ${{ steps.deps.outcome }}
+
+            ISSUE BODY:
+            ${{ steps.issue.outputs.body }}
+
+            Follow the `factory-task` skill in `.claude/skills/factory-task/`.
+            It is the procedure for this run: how to scope the work, what to do
+            when the issue turns out to be wrong, what the two terminal outcomes
+            are, and what you must record before you finish.
+
+            The rules that are never negotiable, restated here because this
+            prompt is the one thing you are guaranteed to read:
+
+            1. You do not merge anything. Open a pull request, or escalate.
+            2. If the work does not fit the allowance, escalate with what you
+               learned. A partial pull request is worse than none.
+            3. Never weaken a test to get green. If a test is wrong, say so in
+               the pull request and explain why.
+            4. Report honestly. If you could not run the tests or the linter,
+               say that in the pull request body. Never imply a check passed
+               that you did not run.
+
+      - name: Record the outcome
+        if: always()
+        env:
+          OUTCOME: ${{ steps.claude.outcome }}
+        run: |
+          set -euo pipefail
+          # `landed` here means the run produced a pull request for a human, not
+          # that anything merged. The ledger records what the factory did; the
+          # merge decision stays with the reviewer.
+          case "$OUTCOME" in
+            success) RESULT=landed ;;
+            *)       RESULT=failed ;;
+          esac
+          EXEC_FILE="${{ steps.claude.outputs.execution_file }}"
+          node .factory/scripts/factory.mjs record \
+            --issue "${{ inputs.issue_number }}" \
+            --run-id "${{ github.run_id }}" \
+            --outcome "$RESULT" \
+            ${EXEC_FILE:+--execution-file "$EXEC_FILE"}
+
+      - name: Clear the in-flight label
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          IN_FLIGHT_LABEL: ${{ steps.caps.outputs.in_flight_label }}
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number('${{ inputs.issue_number }}'),
+                name: process.env.IN_FLIGHT_LABEL,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error; // already gone is fine
+            }
+
+      # A failed run that says nothing is the worst outcome: the issue looks
+      # untouched, the next tick re-admits it, and the loop burns the budget on
+      # the same failure forever. The escalation label is what breaks that cycle.
+      - name: Escalate a failed run
+        if: steps.claude.outcome != 'success'
+        uses: actions/github-script@v7
+        env:
+          ESCALATED_LABEL: ${{ steps.caps.outputs.escalated_label }}
+        with:
+          script: |
+            const issue_number = Number('${{ inputs.issue_number }}');
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number,
+              labels: [process.env.ESCALATED_LABEL],
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number,
+              body: [
+                '**Factory run did not complete.**',
+                '',
+                `Task class \`${{ inputs.task_class }}\` — allowance ${{ steps.caps.outputs.max_turns }} turns / ${{ steps.caps.outputs.deadline_minutes }} minutes.`,
+                `Run log: ${url}`,
+                '',
+                `Labelled \`${process.env.ESCALATED_LABEL}\` so the conductor stops re-admitting it. Remove the label to put it back in the queue.`,
+                '',
+                '---',
+                '_Generated by [Claude Code](https://claude.ai/code)_',
+              ].join('\n'),
+            });

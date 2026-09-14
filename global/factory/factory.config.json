@@ -1,0 +1,49 @@
+{
+  "$comment": "Default factory settings. A target repo overrides any subset in its own .factory.json at the repo root; unset keys fall back to these. See global/factory/readme.md for what each knob does and docs/factory-playbook.md for how to tune them.",
+  "version": 1,
+
+  "enabled": false,
+  "dry_run": true,
+
+  "queue": {
+    "label": "factory",
+    "hold_labels": ["on-hold", "pending", "question", "discussion", "blocked", "wontfix", "needs-design"],
+    "escalated_label": "factory:escalated",
+    "in_flight_label": "factory:in-flight",
+    "audit_label": "factory:audit",
+    "order": "oldest-first"
+  },
+
+  "admission": {
+    "wip_limit": 2,
+    "max_admissions_per_tick": 1,
+    "deadline_minutes": 90,
+    "max_turns": 40,
+    "quiet_hours_utc": [],
+    "task_classes": {
+      "mechanical": { "max_turns": 15, "deadline_minutes": 30 },
+      "standard": { "max_turns": 40, "deadline_minutes": 90 },
+      "deep": { "max_turns": 80, "deadline_minutes": 180 }
+    },
+    "allowed_task_classes": ["mechanical", "standard"]
+  },
+
+  "governor": {
+    "window_hours": 5,
+    "window_turn_budget": 400,
+    "weekly_turn_budget": 4000,
+    "reserve_fraction": 0.3,
+    "default_cooldown_minutes": 300,
+    "ledger_retention_days": 30
+  },
+
+  "audits": {
+    "security": { "enabled": false, "cron": "0 3 * * 1", "task_class": "standard", "max_issues": 3 },
+    "accessibility": { "enabled": false, "cron": "0 4 * * 2", "task_class": "standard", "max_issues": 3 },
+    "seo": { "enabled": false, "cron": "0 4 * * 3", "task_class": "mechanical", "max_issues": 3 },
+    "dependencies": { "enabled": false, "cron": "0 3 * * 4", "task_class": "mechanical", "max_issues": 2 },
+    "docs-drift": { "enabled": false, "cron": "0 4 * * 5", "task_class": "mechanical", "max_issues": 3 }
+  },
+
+  "state_branch": "factory-state"
+}

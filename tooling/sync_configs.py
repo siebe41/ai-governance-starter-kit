@@ -4,8 +4,8 @@ Multi-Target AI Configuration Deployment Engine
 Author: Andrew J. Siebert (@Siebe41)
 
 Merges core `global/` AI assets with dynamic domain templates (`templates/<domain>`)
-and builds target configs for .github, CLAUDE.md, .vscode, .copilot, .claude/skills,
-and .claude/settings.json (hooks).
+and builds target configs for .github (Copilot instructions and workflows), CLAUDE.md,
+.vscode, .copilot, .claude/skills, and .claude/settings.json (hooks).
 
 Selection is persisted per target repo in `.ai-governance.json`: which domain
 templates are active, which individual instructions/prompts/agents/skills/hooks are
@@ -31,7 +31,7 @@ GLOBAL_DIR = REPO_ROOT / "global"
 TEMPLATES_DIR = REPO_ROOT / "templates"
 
 CONFIG_FILENAME = ".ai-governance.json"
-CATEGORIES = ("instructions", "prompts", "agents", "skills", "hooks")
+CATEGORIES = ("instructions", "prompts", "agents", "skills", "hooks", "workflows")
 
 
 def get_kit_version() -> str:
@@ -284,6 +284,68 @@ def build_hooks_target(dest_dir: Path, hook_sources: list[Path], exclude: set[st
         print("  [i] .claude/settings.json hooks already up to date.")
 
 
+def build_workflows_target(dest_dir: Path, workflow_sources: list[Path], exclude: set[str] = frozenset()):
+    """Copies global/workflows/*.yml into a target repo's .github/workflows/.
+
+    Unlike every other category, these assets are executed by GitHub rather than
+    read by a model, and they land in a directory the target repo already owns
+    and fills with its own CI. So this copies ONLY the kit's own `*.yml`
+    fragments in by name and never mirrors or prunes the directory — a repo's
+    hand-written `ci.yml` beside a deployed `factory-conductor.yml` must survive
+    every re-sync untouched.
+
+    `readme.md` is skipped naturally: only `*.yml`/`*.yaml` files are read.
+
+    Returns the filenames actually deployed, so the caller can tell whether the
+    factory engine is needed without re-deriving the exclude logic.
+    """
+    workflows_dir = dest_dir / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+    exclude_lower = {name.lower() for name in exclude}
+    deployed: list[str] = []
+
+    for source in workflow_sources:
+        if not (source.exists() and source.is_dir()):
+            continue
+        for workflow in sorted(
+            p for p in source.iterdir() if p.is_file() and p.suffix.lower() in (".yml", ".yaml")
+        ):
+            if workflow.name.lower() in exclude_lower or workflow.stem.lower() in exclude_lower:
+                continue
+            shutil.copy2(workflow, workflows_dir / workflow.name)
+            deployed.append(workflow.name)
+            print(f"  [+] Copied Workflow: {workflow.name}")
+
+    return deployed
+
+
+def build_factory_target(dest_dir: Path):
+    """Deploys the factory engine (config defaults + scripts) to `.factory/`.
+
+    The path is fixed rather than configurable because the deployed workflows
+    reference it literally — `runs-on` and step `run:` blocks are evaluated
+    before anything can read a config file, so a discoverable path would mean
+    searching the tree at runtime and risking the wrong copy in a repo that
+    vendors the kit source alongside its output.
+
+    Only deployed when `global/workflows/` actually shipped something: a repo
+    that excludes every factory workflow has no use for the engine, and an
+    unreferenced `.factory/` directory is just confusing clutter.
+
+    The target repo's own `.factory.json` at the repo root is NEVER written or
+    overwritten here — that file is the repo's settings, and it layers over
+    `global/factory/factory.config.json` at load time.
+    """
+    source = GLOBAL_DIR / "factory"
+    if not source.exists():
+        return
+    dest = dest_dir / ".factory"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest)
+    print(f"  [+] Deployed factory engine: .factory/")
+
+
 def build_mcp_targets(dest_dir: Path):
     """Deploys global MCP server configurations to client-specific directories."""
     mcp_source = GLOBAL_DIR / "mcp" / "mcp-servers.json"
@@ -363,6 +425,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
     agent_paths = [GLOBAL_DIR / "agents"]
     skill_paths = [GLOBAL_DIR / "skills"]
     hook_paths = [GLOBAL_DIR / "hooks"]
+    workflow_paths = [GLOBAL_DIR / "workflows"]
 
     for tmpl in selected_templates:
         tmpl_path = TEMPLATES_DIR / tmpl
@@ -374,6 +437,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
         agent_paths.append(tmpl_path / "agents")
         skill_paths.append(tmpl_path / "skills")
         hook_paths.append(tmpl_path / "hooks")
+        workflow_paths.append(tmpl_path / "workflows")
 
     # "Bring your own": project-local folders (outside this vendored kit) layer in last,
     # so they survive re-vendoring the canonical source via subtree/submodule updates.
@@ -382,6 +446,7 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
     agent_paths += [output_dir / d for d in local_dirs_cfg["agents"]]
     skill_paths += [output_dir / d for d in local_dirs_cfg["skills"]]
     hook_paths += [output_dir / d for d in local_dirs_cfg["hooks"]]
+    workflow_paths += [output_dir / d for d in local_dirs_cfg["workflows"]]
 
     # 1. Gather combined markdown instructions, stamped with the source kit's version
     #    so a downstream repo can tell which version of the org's rules it's running.
@@ -412,6 +477,15 @@ def sync(cli_templates: list[str] | None, output_dir: Path, reconfigure: bool, a
 
     print("\n📦 Deploying Claude Code Hooks...")
     build_hooks_target(output_dir, hook_paths, exclude=set(exclude["hooks"]))
+
+    print("\n📦 Deploying GitHub Workflows...")
+    deployed_workflows = build_workflows_target(
+        output_dir, workflow_paths, exclude=set(exclude["workflows"])
+    )
+    # The engine only ships if a workflow that uses it did — a repo that excluded
+    # every factory workflow gets no unreferenced `.factory/` directory.
+    if any(name.startswith("factory-") for name in deployed_workflows):
+        build_factory_target(output_dir)
 
     print("\n📦 Deploying Global MCP Servers...")
     build_mcp_targets(output_dir)

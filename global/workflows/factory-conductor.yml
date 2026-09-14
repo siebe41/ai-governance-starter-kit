@@ -1,0 +1,190 @@
+# Ember-style software factory — the conductor.
+#
+# One cron tick: ask the governor whether there is headroom, pick that many
+# issues off the queue, claim each in the ledger, and dispatch a worker per
+# claim. It never runs Claude itself, so a tick is cheap enough to fire often
+# and costs nothing when the answer is "no headroom".
+#
+# Deployed by ai-governance-starter-kit's sync tool. Ships inert: the default
+# config has `enabled: false`, so this file can land in a repo without starting
+# anything until someone writes a `.factory.json` that turns it on.
+#
+# See docs/factory-playbook.md in the kit for how the pieces fit together.
+
+name: Factory Conductor
+
+on:
+  schedule:
+    # Hourly. The governor decides whether a tick does anything, so the cron is
+    # deliberately dumber than the policy — change the budgets, not this line.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report the decision without dispatching workers"
+        type: boolean
+        default: true
+
+concurrency:
+  # Two conductor ticks must never evaluate the same free WIP slot. The ledger's
+  # claim step is the real guard; this is the cheap one that usually prevents it.
+  group: factory-conductor
+  cancel-in-progress: false
+
+permissions:
+  contents: write # the ledger lives on a branch in this repo
+  issues: write
+  actions: write # to dispatch the worker workflow
+
+jobs:
+  tick:
+    # Runner comes from the repo variable FACTORY_RUNNER, not .factory.json —
+    # `runs-on` is evaluated before any step can read a file. Set it to a JSON
+    # string (`"ubuntu-latest"`) or a JSON array for a self-hosted pool
+    # (`["self-hosted","nas","factory"]`) to keep the work on your own hardware.
+    runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The sync tool always deploys the engine to `.factory/`, so this path is
+      # fixed rather than discovered — a search would silently pick the wrong
+      # copy in a repo that vendors the kit source as well as its output.
+      - name: Resolve factory config
+        id: config
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { loadConfig } from './.factory/scripts/ledger.mjs';
+            const c = loadConfig();
+            console.log([
+              'enabled=' + c.enabled,
+              'dry_run=' + c.dry_run,
+              'queue_label=' + c.queue.label,
+              'hold_labels=' + c.queue.hold_labels.join(','),
+              'in_flight_label=' + c.queue.in_flight_label,
+              'state_branch=' + c.state_branch,
+            ].join('\n'));
+          " >> "$GITHUB_OUTPUT"
+
+      - name: Stop if the factory is switched off
+        if: steps.config.outputs.enabled != 'true'
+        run: |
+          echo "Factory is disabled (.factory.json -> enabled: false). Nothing to do."
+          echo "### Factory disabled" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Configure git identity for the ledger
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          git config user.name "factory-conductor"
+          git config user.email "factory-conductor@users.noreply.github.com"
+
+      - name: Read the queue
+        if: steps.config.outputs.enabled == 'true'
+        id: queue
+        uses: actions/github-script@v7
+        env:
+          QUEUE_LABEL: ${{ steps.config.outputs.queue_label }}
+          HOLD_LABELS: ${{ steps.config.outputs.hold_labels }}
+          IN_FLIGHT_LABEL: ${{ steps.config.outputs.in_flight_label }}
+        with:
+          script: |
+            const hold = new Set(process.env.HOLD_LABELS.split(',').filter(Boolean));
+            hold.add(process.env.IN_FLIGHT_LABEL);
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: process.env.QUEUE_LABEL,
+              sort: 'created',
+              direction: 'asc',
+              per_page: 100,
+            });
+            // A pull request is an issue as far as this endpoint is concerned;
+            // admitting one would hand a worker its own output as new work.
+            const eligible = issues
+              .filter((issue) => !issue.pull_request)
+              .filter((issue) => !issue.labels.some((l) => hold.has(typeof l === 'string' ? l : l.name)));
+            core.setOutput('depth', String(eligible.length));
+            core.setOutput('issues', JSON.stringify(eligible.map((i) => ({
+              number: i.number,
+              title: i.title,
+              labels: i.labels.map((l) => (typeof l === 'string' ? l : l.name)),
+            }))));
+            core.summary.addHeading('Factory queue', 3);
+            core.summary.addRaw(`${eligible.length} eligible issue(s) labelled \`${process.env.QUEUE_LABEL}\`.`);
+
+      - name: Ask the governor
+        if: steps.config.outputs.enabled == 'true'
+        id: governor
+        run: node ".factory/scripts/governor.mjs" --queue-depth "${{ steps.queue.outputs.depth }}"
+
+      - name: Claim and dispatch
+        if: steps.config.outputs.enabled == 'true' && steps.governor.outputs.admit != '0'
+        uses: actions/github-script@v7
+        env:
+          ADMIT: ${{ steps.governor.outputs.admit }}
+          ISSUES: ${{ steps.queue.outputs.issues }}
+          IN_FLIGHT_LABEL: ${{ steps.config.outputs.in_flight_label }}
+          DRY_RUN: ${{ inputs.dry_run || steps.config.outputs.dry_run }}
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const admit = Number(process.env.ADMIT);
+            const dryRun = process.env.DRY_RUN === 'true';
+            const queue = JSON.parse(process.env.ISSUES).slice(0, admit);
+
+            for (const issue of queue) {
+              // Task class comes off the issue's own labels, so a human can say
+              // "this one is deep" when filing it. Unlabelled work is
+              // `standard`, never `deep` — the expensive class is opt-in.
+              const cls = ['mechanical', 'deep', 'standard']
+                .find((c) => issue.labels.includes(`factory:${c}`)) ?? 'standard';
+
+              if (dryRun) {
+                core.notice(`[dry run] would admit #${issue.number} as ${cls}: ${issue.title}`);
+                continue;
+              }
+
+              // Claim BEFORE dispatch: the ledger entry is what stops the next
+              // tick from handing the same slot to a second worker.
+              execFileSync('node', [
+                `.factory/scripts/factory.mjs`, 'claim',
+                '--issue', String(issue.number),
+                '--run-id', String(context.runId),
+                '--task-class', cls,
+              ], { stdio: 'inherit' });
+
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [process.env.IN_FLIGHT_LABEL],
+              });
+
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'factory-worker.yml',
+                ref: context.ref.replace('refs/heads/', ''),
+                inputs: { issue_number: String(issue.number), task_class: cls },
+              });
+              core.notice(`admitted #${issue.number} as ${cls}: ${issue.title}`);
+            }
+
+      - name: Summary
+        if: always() && steps.config.outputs.enabled == 'true'
+        run: |
+          {
+            echo "### Conductor tick"
+            echo ""
+            echo "- queue depth: \`${{ steps.queue.outputs.depth }}\`"
+            echo "- admitted: \`${{ steps.governor.outputs.admit }}\`"
+            echo "- reason: ${{ steps.governor.outputs.reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
