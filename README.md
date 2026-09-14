@@ -26,6 +26,8 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
                   |  ├── agents/                     |
                   |  ├── skills/                     |
                   |  ├── hooks/                      |
+                  |  ├── workflows/                  |
+                  |  ├── factory/                    |
                   |  └── mcp/                        |
                   +----------------+-----------------+
                                    |
@@ -49,9 +51,9 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
 +---------------+  +---------------+  +---------------+  +---------------+
 |   .github/    |  |   CLAUDE.md   |  |   .vscode/    |  |   .copilot/   |
 | (Copilot      |  |  .claude/     |  | (Prompts &    |  | (Agent roles  |
-|  Instructions)|  |  skills/      |  |  MCP config)  |  | & MCP config) |
-|               |  |  settings.json|  |               |  |               |
-|               |  |  (hooks)      |  |               |  |               |
+|  Instructions |  |  skills/      |  |  MCP config)  |  | & MCP config) |
+|  + workflows/)|  |  settings.json|  |               |  |               |
+|   .factory/   |  |  (hooks)      |  |               |  |               |
 +---------------+  +---------------+  +---------------+  +---------------+
 
 Every deploy is governed by a per-repo `.ai-governance.json`: which domain
@@ -78,6 +80,8 @@ ai-governance-starter-kit/
 │   ├── agents/                # coordinator.yml, validator.yml, researcher.yml
 │   ├── skills/                # test-driven-development/, using-git-worktrees/, ...
 │   ├── hooks/                 # lint-before-finish.json (Stop/PostToolUse hook fragments)
+│   ├── workflows/             # factory-conductor.yml, factory-worker.yml, factory-audit.yml
+│   ├── factory/               # the autonomous-factory engine (config + Node scripts)
 │   ├── mcp/                   # mcp-servers.json (Central MCP server registry)
 │   └── LEARNINGS.template.md  # Seed file for the per-repo mistakes/learnings log
 │
@@ -240,19 +244,21 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
     "prompts": ["caveman-mode.md"],
     "agents": ["ralph-swarm-runner.yml"],
     "skills": [],
-    "hooks": []
+    "hooks": [],
+    "workflows": []
   },
   "local_dirs": {
     "instructions": ["governance-local/instructions"],
     "prompts": [],
     "agents": [],
     "skills": ["governance-local/skills"],
-    "hooks": []
+    "hooks": [],
+    "workflows": []
   }
 }
 ```
 
-* **`exclude`** — filenames (or, for `skills`, folder names; for `hooks`, the fragment's filename stem, e.g. `lint-before-finish`) to skip on every future sync. Nothing here is deleted from `global/`; it's just not deployed to *this* project. Edit the list, re-run `python tooling/sync_configs.py` (no flags needed — it reuses this file), done.
+* **`exclude`** — filenames (or, for `skills`, folder names; for `hooks`, the fragment's filename stem, e.g. `lint-before-finish`; for `workflows`, either the filename or its stem) to skip on every future sync. Excluding every `factory-*` workflow also suppresses the `.factory/` engine, so a repo that doesn't want a factory gets no orphaned engine directory either. Nothing here is deleted from `global/`; it's just not deployed to *this* project. Edit the list, re-run `python tooling/sync_configs.py` (no flags needed — it reuses this file), done.
 * **`local_dirs`** — extra folders, relative to your project root, merged in alongside the canonical `global/` assets for each category. Drop a `governance-local/instructions/04-team-conventions.md` or `governance-local/skills/my-skill/SKILL.md` in your own project, list the parent folder here, and it deploys on every sync exactly like a canonical asset — including through `--exclude` if you ever want to turn it off. Because these files live outside the vendored `vendor/ai-governance/` (or wherever you cloned the kit), they survive `git subtree pull`/`submodule update` without merge conflicts. `hooks` fragments deploy the same way, except the target is a merge into `.claude/settings.json` rather than a directory copy — see [`global/hooks/readme.md`](/global/hooks/readme.md) for exactly how that merge behaves and why excluding a hook doesn't retroactively strip it from a `settings.json` a previous sync already wrote to (same "Known limitation" as below).
 * **`--reconfigure`** — ignore a saved `.ai-governance.json` and re-run template selection from scratch (also resets `exclude`/`local_dirs` to empty; hand-edit them back in if you still want them).
 * Passing `--templates` explicitly on the command line always wins over a saved selection, for CI/automation use.
@@ -265,13 +271,54 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
 
 ## 🧠 Included Skills
 
-`global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from `obra/superpowers`, MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+`global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from `obra/superpowers`, MIT licensed; and `factory-task`/`factory-audit`, the run procedures behind the autonomous factory below. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
 
 ---
 
 ## 🪝 Global Hooks
 
 `global/hooks/` ships [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — the mechanism for turning a "the model should always do X" instruction into something the harness enforces outside model context, rather than something a model has to remember on every turn. Shipped today: `lint-before-finish` (a `Stop` hook that blocks finishing on a dirty tree until `npm run lint` passes). Unlike every other category, deployment here is a merge into a target repo's `.claude/settings.json` rather than a directory copy — full behavior, the security note on vendoring shell commands, and how to add your own in [`global/hooks/readme.md`](/global/hooks/readme.md).
+
+---
+
+## 🏭 The Autonomous Factory
+
+`global/workflows/` ships three GitHub Actions workflows that together form a **factory**: a governed loop that turns GitHub issues into reviewable pull requests on whatever capacity a Claude subscription has spare, and keeps its own queue fed with scheduled audits. A conductor cron asks a governor whether there is headroom and dispatches at most a configured number of workers; each worker runs exactly one issue under a turn allowance and a wall-clock deadline, then opens a pull request or escalates to a human. **Nothing merges itself** — the human merge decision is the only review this work gets, and a loop that routed around it would just be an unreviewed commit stream.
+
+The governor is the interesting part, and it exists because **there is no public API that reports Claude subscription (Pro/Max) usage** — the Admin API's usage and cost reports are organisation-scoped and need an Admin API key. So it keeps its own turn ledger on an orphan branch and treats a usage-limit error observed by a real run as authoritative over its own arithmetic. Its central knob is `reserve_fraction`: the share of every budget the factory refuses to spend, held back so that sitting down at a terminal in the evening finds headroom waiting rather than a limit the overnight queue already consumed. The factory is meant to use idle capacity, not to race its owner for it.
+
+### This repository runs its own factory
+
+The kit is not just the source of the factory — it is a customer of it. This repo
+carries its own deployed copy:
+
+| Path | What it is |
+| :--- | :--- |
+| `.github/workflows/factory-*.yml` | mirror of `global/workflows/` |
+| `.factory/` | mirror of `global/factory/` |
+| `.claude/skills/factory-*/` | mirror of those two skills in `global/skills/` |
+| `.factory.json` | this repo's own settings — **not** a mirror |
+
+Same canonical-source-plus-mirror pattern as `.claude/skills/` everywhere else:
+**change `global/`, then re-deploy; never edit a mirror.** The `docs-drift` audit
+is the one enabled here, which is fitting — a repo that is mostly documentation
+about its own assets is exactly where a claim and the file it describes drift
+apart quietly.
+
+It runs with `dry_run: true`, `wip_limit: 1` and `reserve_fraction: 0.5` on a
+self-hosted runner. The budget is deliberately below what a single repo would
+take, because the governor accounts **per repo**: two repos each reserving half
+still leaves the pair able to spend more than either number suggests.
+
+The whole thing ships **inert** (`enabled: false`) — deploying it starts nothing until a repo writes its own `.factory.json`. Setup, the dry-run rollout path, tuning, audits, and what to watch for in the first weeks: [`docs/factory-playbook.md`](/docs/factory-playbook.md). Category docs: [`global/workflows/readme.md`](/global/workflows/readme.md) and [`global/factory/readme.md`](/global/factory/readme.md).
+
+---
+
+## ⚙️ Global Workflows
+
+`global/workflows/` is the category for governance that runs **whether or not anyone opens an editor** — `instructions/` is a policy a model reads, `hooks/` is a rule the harness enforces during a session, and a workflow is a rule that runs on a schedule or a webhook with no session involved at all. Files deploy into `.github/workflows/` additively: a repo's own `ci.yml` beside a deployed `factory-conductor.yml` survives every re-sync untouched, and nothing is ever pruned.
+
+Like `hooks/`, this category's assets **execute** — here with repository credentials and a `permissions` block — so read any workflow in full before vendoring it. See [`global/workflows/readme.md`](/global/workflows/readme.md) for the security notes and how to add your own.
 
 ---
 
@@ -295,6 +342,7 @@ Beyond the baseline security/coding/testing guardrails, `global/agents/` and `gl
 | **Swarm** | Agents | `global/agents/foreman.yml`, `swarm-scout.yml`, `swarm-builder.yml`, `swarm-auditor.yml` | Foreman decomposes a feature into independent, non-overlapping units of work and dispatches each to a Scout (research), Builder (implement), or Auditor (review/test) sub-agent running in its own branch/worktree; Foreman owns the merge. |
 | **Ralph Swarm** | Agents | `global/agents/foreman.yml`, `global/agents/ralph-swarm-runner.yml` | Foreman partitions a large `IMPLEMENTATION_PLAN.md` across several parallel Ralph loops; each Runner claims tasks off the shared plan to avoid collisions, and the Foreman reconciles/merges as runners signal done. |
 | **AI Team** | Agents / Skill | `global/agents/ai-team-producer.yml`, `ai-team-dev.yml`, `ai-team-qa.yml`, `global/skills/ai-team-orchestration/` | A small persistent team (Producer coordinates + merges, Dev implements, QA optionally tests) running Plan → Implement → Test → optional review/QA → Merge, with a project brief and sprint-plan template for durable cross-session context. |
+| **Autonomous Factory** | Workflows / Skills | `global/workflows/factory-*.yml`, `global/factory/`, `global/skills/factory-task/`, `factory-audit/` | A governed unattended loop: a cron conductor admits queued GitHub issues within a usage budget, each worker runs one issue under a turn/time cap and opens a PR or escalates, and scheduled read-only audits file new work into the same queue. Nothing merges itself. See [`docs/factory-playbook.md`](/docs/factory-playbook.md). |
 | **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
 | **Caveman Mode** | Prompt / Skill | `global/prompts/caveman-mode.md`, `global/skills/caveman/` (+ `caveman-commit`, `caveman-review`, `caveman-help`, `compress`) | Optional terse, low-token communication style — never applied to code correctness or user-facing deliverables. The `global/skills/` family self-triggers on Claude Code with commit/review/compress variants; the prompt covers Copilot/VS Code, which have no Skills system to self-trigger from. |
 
