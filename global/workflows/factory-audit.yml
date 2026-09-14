@@ -157,6 +157,10 @@ jobs:
             console.log([
               'max_issues=' + (spec.max_issues ?? 3),
               'task_class=' + (spec.task_class ?? 'standard'),
+              // Repo-specific scope for this audit, one line. Lets a repo say
+              // 'this drift is already accepted, only file what is new' without
+              // forking the skill.
+              'notes=' + String(spec.notes ?? '').replace(/[\r\n]+/g, ' '),
               'queue_label=' + c.queue.label,
               'audit_label=' + c.queue.audit_label,
               'dry_run=' + c.dry_run,
@@ -180,6 +184,7 @@ jobs:
             QUEUE LABEL: ${{ steps.spec.outputs.queue_label }}
             AUDIT LABEL: ${{ steps.spec.outputs.audit_label }}
             DRY RUN:     ${{ inputs.dry_run || steps.spec.outputs.dry_run }}
+            NOTES:       ${{ steps.spec.outputs.notes }}
 
             Follow the `factory-audit` skill in `.claude/skills/factory-audit/`.
             It defines what each audit dimension covers, the evidence bar a
@@ -189,6 +194,10 @@ jobs:
             The rules that matter most, restated because this prompt is the one
             thing you are guaranteed to read:
 
+            0. **Read `CLAUDE.md` and `LEARNINGS.md` first**, plus the NOTES line
+               above. A repo has usually already decided things you would
+               otherwise "find" — re-reporting an accepted decision every cycle
+               is how this feature gets switched off.
             1. **Change no code.** This is a read-only pass. Your only output is
                issues.
             2. **File at most MAX ISSUES.** If you find more, file the most

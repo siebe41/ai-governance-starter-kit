@@ -49,6 +49,7 @@
     "ledger_retention_days": 30
   },
 
+  "$comment_audits": "Each audit takes an optional one-line `notes` string, threaded into the auditor's prompt as repo-specific scope. Use it to say what this repo has already decided -- e.g. that certain docs are knowingly stale and only NEW drift is worth filing -- so the audit does not re-file an accepted decision every cycle, which is how this feature gets switched off.",
   "audits": {
     "security": { "enabled": false, "cron": "0 3 * * 1", "task_class": "standard", "max_issues": 3 },
     "accessibility": { "enabled": false, "cron": "0 4 * * 2", "task_class": "standard", "max_issues": 3 },
