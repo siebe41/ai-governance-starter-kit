@@ -99,14 +99,53 @@ jobs:
       matrix:
         audit: ${{ fromJSON(needs.select.outputs.audits) }}
     runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    env:
+      # ── Billing guard ───────────────────────────────────────────────────
+      # This factory is meant to run on a Claude *subscription*, never at API
+      # rates. claude-code-action resolves its key as
+      # `inputs.anthropic_api_key || env.ANTHROPIC_API_KEY` (action.yml), so an
+      # ANTHROPIC_API_KEY present in the environment is forwarded into the run
+      # even though this workflow never passes one — and a self-hosted runner
+      # inherits its host's environment, where such a key may well exist for
+      # something else entirely. Pinning it empty at job scope means the only
+      # credential that can reach the run is the OAuth token below.
+      ANTHROPIC_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Preflight — subscription credential and runner
+        id: preflight
+        env:
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_OAUTH" != "true" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN is not set. The factory runs on a Claude subscription, not API credit." >&2
+            echo "Generate one with \`claude setup-token\` and add it as a repository secret." >&2
+            exit 1
+          fi
+          REQUIRE_SELF_HOSTED="$(node -p "require('./.factory/factory.config.json').require_self_hosted === true || (require('fs').existsSync('.factory.json') && require('./.factory.json').require_self_hosted === true)")"
+          if [ "$REQUIRE_SELF_HOSTED" = "true" ] && [ "${{ runner.environment }}" != "self-hosted" ]; then
+            echo "::error::require_self_hosted is on, but this job landed on a ${{ runner.environment }} runner." >&2
+            echo "Set the FACTORY_RUNNER repository variable to your runner labels, e.g. [\"self-hosted\",\"nas\",\"factory\"]." >&2
+            exit 1
+          fi
+          echo "auth: subscription (OAuth) · runner: ${{ runner.environment }}"
+
+      - name: Host capacity check
+        id: host
+        run: node .factory/scripts/hostcheck.mjs
+
+      - name: Skip — host is busy
+        if: steps.host.outputs.ok != 'true'
+        run: echo "::notice::Skipping the ${{ matrix.audit }} audit — ${{ steps.host.outputs.reason }}. It will run on its next scheduled day."
+
       - name: Resolve audit settings
         id: spec
+        if: steps.host.outputs.ok == 'true' 
         env:
           AUDIT: ${{ matrix.audit }}
         run: |
@@ -125,6 +164,7 @@ jobs:
           " >> "$GITHUB_OUTPUT"
 
       - uses: anthropics/claude-code-action@v1
+        if: steps.host.outputs.ok == 'true'
         timeout-minutes: 30
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

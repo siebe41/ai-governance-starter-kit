@@ -5,6 +5,17 @@
   "enabled": false,
   "dry_run": true,
 
+  "$comment_runner": "require_self_hosted fails a factory job that lands on a GitHub-hosted runner. Turn it on when the factory must run on your own hardware -- on a Claude subscription via CLAUDE_CODE_OAUTH_TOKEN, and without spending Actions minutes. The runner labels themselves come from the FACTORY_RUNNER repository variable, since `runs-on` is evaluated before any step can read this file.",
+  "require_self_hosted": false,
+
+  "$comment_host": "Host capacity guard. wip_limit counts FACTORY work; a self-hosted box shares itself with CI, a Docker swarm, and everything else on it. These thresholds are asked of the machine, so a busy host defers rather than piling on. A deferred run releases its claim and requeues -- nothing consumed, nothing escalated. Linux-only (/proc); reports ok elsewhere rather than guessing.",
+  "host": {
+    "enabled": true,
+    "max_load_per_cpu": 0.7,
+    "min_free_memory_mb": 2048,
+    "min_free_disk_gb": 10
+  },
+
   "queue": {
     "label": "factory",
     "hold_labels": ["on-hold", "pending", "question", "discussion", "blocked", "wontfix", "needs-design"],

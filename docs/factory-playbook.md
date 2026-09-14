@@ -74,7 +74,7 @@ factory run on your Claude subscription rather than on metered API credit.
 Generate it with `claude setup-token` and store it under
 *Settings → Secrets and variables → Actions*.
 
-### 3. Choose where it runs (optional)
+### 3. Choose where it runs
 
 Set the repository **variable** `FACTORY_RUNNER`:
 
@@ -85,12 +85,17 @@ Set the repository **variable** `FACTORY_RUNNER`:
 | `["self-hosted","nas","factory"]` | your own runner pool |
 
 It is a variable rather than a `.factory.json` key because `runs-on` is evaluated
-before any step can read a file. A self-hosted pool is the better home for this
-work: long runs cost no Actions minutes, and the factory is meant to be patient.
+before any step can read a file.
 
-> **Give the factory its own runner labels.** A long factory run sitting in the
-> same pool as your CI will queue pull-request checks behind it. Carve out
-> dedicated capacity rather than sharing the CI pool.
+If the factory **must** run on your own hardware, also set
+`"require_self_hosted": true` in `.factory.json`. Every factory job then fails
+fast on a GitHub-hosted runner rather than quietly running there and spending
+Actions minutes — `runner.environment` is `github-hosted` or `self-hosted`, and
+the preflight checks it.
+
+> **Give the factory its own runner labels.** A long factory run in the same pool
+> as your CI will queue pull-request checks behind it. Dedicated labels, not
+> shared capacity.
 
 ### 4. Create the labels
 
@@ -123,6 +128,79 @@ claim, run, pull request, ledger record.
 Then raise the limits slowly. The failure mode of this system is not a bad pull
 request — it is twenty of them arriving at once with nobody willing to read the
 twenty-first.
+
+---
+
+---
+
+## 💳 The billing guard
+
+The factory is designed to run on a Claude **subscription**, never at API rates.
+Two things enforce that rather than assume it:
+
+**The OAuth token is required.** Every factory job preflights
+`CLAUDE_CODE_OAUTH_TOKEN` and fails with a clear message if it is missing —
+instead of starting a run that might authenticate some other way.
+
+**`ANTHROPIC_API_KEY` is pinned empty at job scope.** This one is not
+theoretical. `claude-code-action` resolves its key as:
+
+```yaml
+ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key || env.ANTHROPIC_API_KEY }}
+```
+
+— it reads the **environment** when no input is given. A self-hosted runner
+inherits its host's environment, so an `ANTHROPIC_API_KEY` present on that box
+for something else entirely would be forwarded into the run, and the action's own
+docs note that a static credential takes precedence over other auth. Pinning it
+empty in the job's `env:` means the only credential that can reach the run is the
+OAuth token.
+
+The conductor carries neither guard, because it runs no model at all.
+
+---
+
+## 🖥️ Not overloading the box
+
+`wip_limit` counts **factory** work. A self-hosted runner shares its machine with
+CI, a container swarm, databases — everything else that box is for — and the
+factory can see none of it. Two workers under a WIP limit of two will start
+happily on a host already at load 30 because of a CI storm, and what suffers is
+not the factory: it is the pull-request checks and interactive work queued behind
+it.
+
+So capacity is also asked of the **machine**:
+
+```json
+"host": {
+  "enabled": true,
+  "max_load_per_cpu": 0.7,
+  "min_free_memory_mb": 2048,
+  "min_free_disk_gb": 10
+}
+```
+
+**A busy host defers, it does not fail.** The worker releases its claim, the
+issue returns to the queue with nothing consumed, and nothing is escalated —
+being busy is not a failure, and must not cost an issue its budget or a human's
+attention. The conductor checks too, so a loaded box does not produce an
+admit-then-immediately-defer churn every hour.
+
+Three notes on the implementation:
+
+* It reads **`MemAvailable`**, not `MemFree`. Page cache is reclaimable and
+  `MemFree` on a healthy Linux box is near zero by design — checking it would
+  defer every run forever.
+* It reads `/proc/loadavg` directly rather than `os.loadavg()`, which returns
+  `[0,0,0]` on platforms with no load concept and would read as a perfectly idle
+  machine.
+* **Unknown never means unhealthy.** Any probe that cannot be read is skipped
+  rather than blocking work on a host it knows nothing about. On non-Linux it
+  reports "ok" — this is a guard, not a gate.
+
+If several runners share one physical machine, remember each sees the *whole*
+host's load, so they will defer together. That is the intent: the limit is the
+machine, not the runner.
 
 ---
 

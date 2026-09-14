@@ -120,13 +120,23 @@ jobs:
             core.summary.addHeading('Factory queue', 3);
             core.summary.addRaw(`${eligible.length} eligible issue(s) labelled \`${process.env.QUEUE_LABEL}\`.`);
 
+      # Asked here as well as in the worker, for different reasons: here it
+      # avoids admit-then-immediately-defer churn (a claim, a dispatch, a
+      # release, and an issue bouncing in and out of the queue every hour);
+      # in the worker it is authoritative, because minutes pass between the two
+      # and another runner on the same box may have taken the headroom.
+      - name: Host capacity check
+        id: host
+        if: steps.config.outputs.enabled == 'true'
+        run: node .factory/scripts/hostcheck.mjs
+
       - name: Ask the governor
         if: steps.config.outputs.enabled == 'true'
         id: governor
         run: node ".factory/scripts/governor.mjs" --queue-depth "${{ steps.queue.outputs.depth }}"
 
       - name: Claim and dispatch
-        if: steps.config.outputs.enabled == 'true' && steps.governor.outputs.admit != '0'
+        if: steps.config.outputs.enabled == 'true' && steps.governor.outputs.admit != '0' && steps.host.outputs.ok == 'true'
         uses: actions/github-script@v7
         env:
           ADMIT: ${{ steps.governor.outputs.admit }}
@@ -187,4 +197,5 @@ jobs:
             echo "- queue depth: \`${{ steps.queue.outputs.depth }}\`"
             echo "- admitted: \`${{ steps.governor.outputs.admit }}\`"
             echo "- reason: ${{ steps.governor.outputs.reason }}"
+            echo "- host: ${{ steps.host.outputs.reason }}"
           } >> "$GITHUB_STEP_SUMMARY"

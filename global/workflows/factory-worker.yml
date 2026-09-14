@@ -40,6 +40,17 @@ jobs:
     # string (`"ubuntu-latest"`) or a JSON array for a self-hosted pool
     # (`["self-hosted","nas","factory"]`) to keep the work on your own hardware.
     runs-on: ${{ fromJSON(vars.FACTORY_RUNNER || '"ubuntu-latest"') }}
+    env:
+      # ── Billing guard ───────────────────────────────────────────────────
+      # This factory is meant to run on a Claude *subscription*, never at API
+      # rates. claude-code-action resolves its key as
+      # `inputs.anthropic_api_key || env.ANTHROPIC_API_KEY` (action.yml), so an
+      # ANTHROPIC_API_KEY present in the environment is forwarded into the run
+      # even though this workflow never passes one — and a self-hosted runner
+      # inherits its host's environment, where such a key may well exist for
+      # something else entirely. Pinning it empty at job scope means the only
+      # credential that can reach the run is the OAuth token below.
+      ANTHROPIC_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,6 +59,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Preflight — subscription credential and runner
+        id: preflight
+        env:
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_OAUTH" != "true" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN is not set. The factory runs on a Claude subscription, not API credit." >&2
+            echo "Generate one with \`claude setup-token\` and add it as a repository secret." >&2
+            exit 1
+          fi
+          REQUIRE_SELF_HOSTED="$(node -p "require('./.factory/factory.config.json').require_self_hosted === true || (require('fs').existsSync('.factory.json') && require('./.factory.json').require_self_hosted === true)")"
+          if [ "$REQUIRE_SELF_HOSTED" = "true" ] && [ "${{ runner.environment }}" != "self-hosted" ]; then
+            echo "::error::require_self_hosted is on, but this job landed on a ${{ runner.environment }} runner." >&2
+            echo "Set the FACTORY_RUNNER repository variable to your runner labels, e.g. [\"self-hosted\",\"nas\",\"factory\"]." >&2
+            exit 1
+          fi
+          echo "auth: subscription (OAuth) · runner: ${{ runner.environment }}"
 
       - name: Resolve caps for this task class
         id: caps
@@ -94,6 +124,24 @@ jobs:
             core.setOutput('body', data.body || '');
             core.setOutput('labels', data.labels.map((l) => (typeof l === 'string' ? l : l.name)).join(', '));
 
+      # ── Host capacity ───────────────────────────────────────────────────
+      # `wip_limit` counts factory work only. This box also runs CI, a Docker
+      # swarm, and whatever else it is for, so capacity is asked of the machine
+      # itself. A busy host DEFERS: the claim is released, the issue returns to
+      # the queue untouched, and nothing is escalated — being busy is not a
+      # failure and must not cost the issue its budget or a human's attention.
+      - name: Host capacity check
+        id: host
+        run: node .factory/scripts/hostcheck.mjs
+
+      - name: Defer — host is busy
+        if: steps.host.outputs.ok != 'true'
+        run: |
+          echo "::notice::Deferring #${{ inputs.issue_number }} — ${{ steps.host.outputs.reason }}"
+          node .factory/scripts/factory.mjs release --issue "${{ inputs.issue_number }}"
+          echo "### Deferred: host busy" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.host.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+
       # Project setup. Deliberately best-effort and non-fatal: a repo with no
       # package.json is not a broken factory, and a failed install should reach
       # Claude as context to work around rather than kill the run before it
@@ -101,6 +149,7 @@ jobs:
       # was never there — the skill's reporting rules cover that.
       - name: Install dependencies
         id: deps
+        if: steps.host.outputs.ok == 'true'
         continue-on-error: true
         run: |
           if [ -f package-lock.json ]; then npm ci
@@ -109,6 +158,7 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         id: claude
+        if: steps.host.outputs.ok == 'true' 
         timeout-minutes: ${{ fromJSON(steps.caps.outputs.deadline_minutes) }}
         continue-on-error: true
         with:
@@ -151,7 +201,7 @@ jobs:
                that you did not run.
 
       - name: Record the outcome
-        if: always()
+        if: always() && steps.host.outputs.ok == 'true' 
         env:
           OUTCOME: ${{ steps.claude.outcome }}
         run: |

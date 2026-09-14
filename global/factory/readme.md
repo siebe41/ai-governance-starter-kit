@@ -12,6 +12,7 @@ Operating guide, setup and tuning: [`docs/factory-playbook.md`](../../docs/facto
 | `scripts/ledger.mjs` | Durable state on an orphan branch, config loading, pruning. |
 | `scripts/governor.mjs` | The admission decision. `--self-test` proves the policy. |
 | `scripts/factory.mjs` | Operator + workflow CLI: `status`, `claim`, `record`, `release`, `pause`, `resume`. `--self-test` proves the log parser. |
+| `scripts/hostcheck.mjs` | Host capacity preflight — load, available memory, free disk. `--self-test` proves the thresholds. |
 
 Node 20+ stdlib only — no `npm install`, nothing to audit, nothing to keep
 patched. That is deliberate: this code runs with repository credentials on a
@@ -37,15 +38,22 @@ idle capacity, not to race its owner for it — reserving a slice of every windo
 means sitting down at a terminal in the evening finds headroom waiting rather
 than a limit the overnight queue already spent.
 
+## Two guards the workflows add on top
+
+**Billing.** `claude-code-action` resolves its key as `inputs.anthropic_api_key || env.ANTHROPIC_API_KEY` — it reads the *environment* when no input is given, and a self-hosted runner inherits its host's environment. Every model-running factory workflow therefore pins `ANTHROPIC_API_KEY: ""` at job scope and preflights that `CLAUDE_CODE_OAUTH_TOKEN` exists, so a stray key on the box cannot silently move the run onto API billing.
+
+**The machine.** `wip_limit` counts factory work; a self-hosted box also runs CI and everything else it is for. `hostcheck.mjs` asks the host itself, and a busy host **defers** — the claim is released and the issue requeues with nothing consumed and nothing escalated. Being busy is not a failure.
+
 ## Verifying a change
 
 Both scripts carry their own assertions and need no repo, branch, or network:
 
 ```bash
-node .factory/scripts/governor.mjs --self-test   # admission policy
-node .factory/scripts/factory.mjs  --self-test   # execution-log parsing
+node .factory/scripts/governor.mjs  --self-test   # admission policy
+node .factory/scripts/factory.mjs   --self-test   # execution-log parsing
+node .factory/scripts/hostcheck.mjs --self-test   # host capacity thresholds
 ```
 
-Run both after touching either. The governor's self-test is the specification of
+Run all three after touching any of them. The governor's self-test is the specification of
 the admission policy in executable form — if you change a rule, change its
 assertion in the same commit.
