@@ -34,5 +34,6 @@
     }
   ],
   "limit": null,
-  "paused": false
+  "paused": true,
+  "paused_reason": "Ledger writes fail auth (claude-code-action revokes its token before the record step), which also skips escalation via GitHub's implicit success() gate — so a failed run is neither recorded nor held, and re-admits hourly at full allowance. Paused pending a decision on the worker harness."
 }
