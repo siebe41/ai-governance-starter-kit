@@ -24,7 +24,15 @@
       "finished_at": "2026-09-15T16:29:20.359Z"
     }
   ],
-  "in_flight": [],
+  "in_flight": [
+    {
+      "issue": 6,
+      "run_id": "34998507248",
+      "task_class": "mechanical",
+      "started_at": "2026-09-15T17:00:20.834Z",
+      "deadline_at": "2026-09-15T17:30:20.834Z"
+    }
+  ],
   "limit": null,
   "paused": false
 }
