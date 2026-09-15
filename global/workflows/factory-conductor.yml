@@ -68,6 +68,7 @@ jobs:
               'queue_label=' + c.queue.label,
               'hold_labels=' + c.queue.hold_labels.join(','),
               'in_flight_label=' + c.queue.in_flight_label,
+              'escalated_label=' + c.queue.escalated_label,
               'state_branch=' + c.state_branch,
             ].join('\n'));
           " >> "$GITHUB_OUTPUT"
@@ -93,6 +94,7 @@ jobs:
           QUEUE_LABEL: ${{ steps.config.outputs.queue_label }}
           HOLD_LABELS: ${{ steps.config.outputs.hold_labels }}
           IN_FLIGHT_LABEL: ${{ steps.config.outputs.in_flight_label }}
+          ESCALATED_LABEL: ${{ steps.config.outputs.escalated_label }}
         with:
           script: |
             // Hold labels match case-insensitively, and an entry ending in `*`
@@ -111,6 +113,17 @@ jobs:
               else holdExact.add(entry);
             }
             holdExact.add(process.env.IN_FLIGHT_LABEL.toLowerCase());
+            // An escalated issue is waiting on a HUMAN, and holding it is the
+            // contract the escalation comment states out loud: "remove the label
+            // to put it back in the queue." Without this it went straight back
+            // into the queue on the very next tick, failed the same way, and was
+            // re-escalated -- an hourly loop that burns a full turn allowance
+            // each time, because a run with no parseable transcript is charged
+            // its whole allowance. Two ticks had already run before this was
+            // found. Added here rather than asked of every repo's `hold_labels`:
+            // it follows from `escalated_label` existing at all, exactly like
+            // the in-flight label above.
+            holdExact.add(process.env.ESCALATED_LABEL.toLowerCase());
             const isHeld = (name) => {
               const n = String(name).toLowerCase();
               return holdExact.has(n) || holdPrefix.some((prefix) => n.startsWith(prefix));
