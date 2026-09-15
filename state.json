@@ -1,15 +1,19 @@
 {
   "version": 1,
-  "runs": [],
-  "in_flight": [
+  "runs": [
     {
       "issue": 6,
-      "run_id": "34988412098",
+      "run_id": "34988432669",
       "task_class": "mechanical",
+      "outcome": "failed",
+      "turns": 15,
+      "turns_estimated": true,
+      "cost_usd": null,
       "started_at": "2026-09-15T15:26:10.623Z",
-      "deadline_at": "2026-09-15T15:56:10.623Z"
+      "finished_at": "2026-09-15T15:26:33.135Z"
     }
   ],
+  "in_flight": [],
   "limit": null,
   "paused": false
 }
