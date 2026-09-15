@@ -2,8 +2,8 @@
   "_comment": "Factory settings for this repo. Layers over global/factory/factory.config.json (the kit's own defaults); unset keys fall through to it. The deployed engine lives in .factory/ and the workflows in .github/workflows/factory-*.yml -- both are MIRRORS of global/factory/ and global/workflows/, same canonical-source pattern as .claude/skills/ mirroring global/skills/. Change global/, then re-deploy; never edit the mirror. Full guide: docs/factory-playbook.md.",
 
   "enabled": true,
-  "_comment_dry_run": "Stays true until a few conductor ticks have been read and judged sensible. Turning it off is the decision to let this thing open pull requests unattended -- make it deliberately.",
-  "dry_run": true,
+  "_comment_dry_run": "Turned off 2026-09-15 after conductor ticks on the wsl-factory-kit-1 runner reported a correct decision (queue depth 1, admitted 1, window 0/100, host has capacity) and dispatched nothing. From here a tick CLAIMS the issue and dispatches a worker. Set back to true to stop admitting without touching anything else -- work already in flight still finishes.",
+  "dry_run": false,
 
   "_comment_runner": "The factory runs on the WSL2 pool on the Windows desktop (runner-kit-1 / runner-kit-2, labels self-hosted+factory+wsl). Set the FACTORY_RUNNER repository variable to [\"self-hosted\",\"factory\"]. require_self_hosted then fails a job that lands on a GitHub-hosted runner instead of quietly spending Actions minutes.",
   "require_self_hosted": true,
