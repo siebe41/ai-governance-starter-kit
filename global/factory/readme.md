@@ -1,10 +1,21 @@
 # 🏭 Factory Engine
 
 The dependency-free Node engine behind the three `factory-*` workflows in
-[`global/workflows/`](../workflows/readme.md). The sync tool deploys this whole
-folder to a target repo's `.factory/` whenever any of those workflows ships.
+[`global/workflows/`](https://github.com/siebe41/ai-governance-starter-kit/blob/main/global/workflows/readme.md).
+The sync tool deploys this whole folder to a target repo's `.factory/` whenever
+any of those workflows ships.
 
-Operating guide, setup and tuning: [`docs/factory-playbook.md`](../../docs/factory-playbook.md).
+Operating guide, setup and tuning:
+[`docs/factory-playbook.md`](https://github.com/siebe41/ai-governance-starter-kit/blob/main/docs/factory-playbook.md).
+
+<!--
+These two links are absolute GitHub URLs, not relative paths, on purpose: this
+file is mirrored by `tooling/sync_configs.py`'s `build_factory_target()` into
+`.factory/` at a consuming repo's root, two directory levels shallower than
+`global/factory/` here — and a vendored repo has no `global/` or `docs/` tree
+at all. A relative or repo-root-relative link would break in that deployed
+copy. Do not "fix" these back to relative links.
+-->
 
 | File | Role |
 | :--- | :--- |
