@@ -24,15 +24,7 @@
       "finished_at": "2026-09-15T16:29:20.359Z"
     }
   ],
-  "in_flight": [
-    {
-      "issue": 6,
-      "run_id": "34998507248",
-      "task_class": "mechanical",
-      "started_at": "2026-09-15T17:00:20.834Z",
-      "deadline_at": "2026-09-15T17:30:20.834Z"
-    }
-  ],
+  "in_flight": [],
   "limit": null,
   "paused": true,
   "paused_reason": "Ledger writes fail auth (claude-code-action revokes its token before the record step), which also skips escalation via GitHub's implicit success() gate — so a failed run is neither recorded nor held, and re-admits hourly at full allowance. Paused pending a decision on the worker harness."
