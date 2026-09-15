@@ -1,0 +1,97 @@
+# Checks on the factory itself.
+#
+# This repository DISTRIBUTES workflows: what lands in `global/workflows/` is
+# copied into other repositories' `.github/workflows/`. A workflow that does not
+# parse is therefore not one broken repo, it is every repo that syncs next.
+#
+# That is not hypothetical. An unparseable `factory-worker.yml` reached `main`
+# and shipped to a second repository before anything noticed, because a workflow
+# GitHub cannot parse does not fail loudly — it produces a run with **zero
+# jobs**, named after the file path rather than the workflow, and takes down the
+# conductor that tried to dispatch it. The cause was a literal empty `${{` `}}`
+# written inside a *shell comment*: GitHub substitutes expressions before the
+# shell ever sees the `#`, so a comment is not a hiding place. No YAML parser
+# catches that, because the YAML was valid.
+#
+# actionlint is the thing that does catch it, in about a second.
+
+name: Factory CI
+
+on:
+  pull_request:
+    paths:
+      - "global/workflows/**"
+      - "global/factory/**"
+      - ".github/workflows/**"
+      - ".factory/**"
+  push:
+    branches: [main]
+    paths:
+      - "global/workflows/**"
+      - "global/factory/**"
+      - ".github/workflows/**"
+      - ".factory/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # Deliberately NOT the factory's own self-hosted pool: this is the gate that
+    # tells you the factory is broken, so it must not depend on the factory's
+    # hardware being up to run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint every workflow, canonical and deployed
+        run: |
+          set -euo pipefail
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          # `global/workflows/` is the source; `.github/workflows/` is this
+          # repo's own deployed copy. Both are checked, because a mirror can
+          # drift and a broken mirror breaks this repo even when the source is
+          # fine.
+          ./actionlint -color global/workflows/*.yml .github/workflows/*.yml
+
+      - name: Canonical workflows and their mirrors must agree
+        run: |
+          set -euo pipefail
+          status=0
+          for src in global/workflows/*.yml; do
+            mirror=".github/workflows/$(basename "$src")"
+            [ -f "$mirror" ] || continue
+            if ! diff -q "$src" "$mirror" >/dev/null; then
+              echo "::error file=$mirror::$mirror has drifted from its canonical source $src"
+              diff -u "$src" "$mirror" || true
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Engine self-tests
+        run: |
+          set -euo pipefail
+          node global/factory/scripts/governor.mjs --self-test
+          node global/factory/scripts/parse-cli-result.mjs --self-test
+
+      - name: Factory config must parse and stay in step with the engine
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const c = JSON.parse(readFileSync('global/factory/factory.config.json', 'utf8'));
+            // The conductor holds the escalated label out of the queue by
+            // reading these two keys; a rename that reached only the workflow
+            // would silently reopen the hourly re-run loop.
+            for (const k of ['label', 'hold_labels', 'escalated_label', 'in_flight_label']) {
+              if (c.queue?.[k] === undefined) throw new Error('queue.' + k + ' is missing from factory.config.json');
+            }
+            if (!Array.isArray(c.admission?.allowed_task_classes)) throw new Error('admission.allowed_task_classes must be an array');
+            console.log('factory.config.json OK');
+          "

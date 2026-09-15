@@ -209,6 +209,15 @@ jobs:
                 labels: [process.env.IN_FLIGHT_LABEL],
               });
 
+              // The claim and the label are written BEFORE the dispatch on
+              // purpose — that ordering is what stops a second tick taking the
+              // same slot. But it leaves both to be rolled back if the dispatch
+              // itself throws, and it does: an unparseable factory-worker.yml
+              // fails here, having already claimed and labelled. The claim
+              // self-heals at its deadline; THE LABEL NEVER DOES, so without
+              // this the issue is held out of the queue forever by a run that
+              // never started.
+              try {
               await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -216,6 +225,20 @@ jobs:
                 ref: context.ref.replace('refs/heads/', ''),
                 inputs: { issue_number: String(issue.number), task_class: cls },
               });
+              } catch (error) {
+                execFileSync('node', [
+                  `.factory/scripts/factory.mjs`, 'release',
+                  '--issue', String(issue.number),
+                ], { stdio: 'inherit' });
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: process.env.IN_FLIGHT_LABEL,
+                }).catch(() => {});
+                core.setFailed(`Dispatch failed for #${issue.number}; claim and label rolled back. ${error.message}`);
+                continue;
+              }
               core.notice(`admitted #${issue.number} as ${cls}: ${issue.title}`);
             }
 

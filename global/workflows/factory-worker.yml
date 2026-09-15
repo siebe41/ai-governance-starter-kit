@@ -216,7 +216,7 @@ jobs:
           # The issue title and body are UNTRUSTED text — anyone who can file an
           # issue writes them. They reach the prompt through the environment and
           # a file, and are never interpolated into this shell script nor into a
-          # ${{ }} expression, so an issue body cannot close a quote and run a
+          # workflow expression, so an issue body cannot close a quote and run a
           # command on the runner. The `factory` label still gates who can queue
           # work at all; this is the second line of defence, not the first.
           {
