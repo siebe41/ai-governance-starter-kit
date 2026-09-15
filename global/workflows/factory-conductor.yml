@@ -95,8 +95,26 @@ jobs:
           IN_FLIGHT_LABEL: ${{ steps.config.outputs.in_flight_label }}
         with:
           script: |
-            const hold = new Set(process.env.HOLD_LABELS.split(',').filter(Boolean));
-            hold.add(process.env.IN_FLIGHT_LABEL);
+            // Hold labels match case-insensitively, and an entry ending in `*`
+            // matches by prefix. The prefix form exists because a repo can have
+            // a SECOND automation keyed on a label family — HockeyManagerPortal
+            // triggers a separate agent pipeline on any `agent:*` label — and
+            // admitting such an issue here would put two agents on one issue and
+            // race them to open competing pull requests. Enumerating every
+            // suffix is not possible; `agent*` is.
+            const holdExact = new Set();
+            const holdPrefix = [];
+            for (const raw of process.env.HOLD_LABELS.split(',')) {
+              const entry = raw.trim().toLowerCase();
+              if (!entry) continue;
+              if (entry.endsWith('*')) holdPrefix.push(entry.slice(0, -1));
+              else holdExact.add(entry);
+            }
+            holdExact.add(process.env.IN_FLIGHT_LABEL.toLowerCase());
+            const isHeld = (name) => {
+              const n = String(name).toLowerCase();
+              return holdExact.has(n) || holdPrefix.some((prefix) => n.startsWith(prefix));
+            };
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -110,7 +128,7 @@ jobs:
             // admitting one would hand a worker its own output as new work.
             const eligible = issues
               .filter((issue) => !issue.pull_request)
-              .filter((issue) => !issue.labels.some((l) => hold.has(typeof l === 'string' ? l : l.name)));
+              .filter((issue) => !issue.labels.some((l) => isHeld(typeof l === 'string' ? l : l.name)));
             core.setOutput('depth', String(eligible.length));
             core.setOutput('issues', JSON.stringify(eligible.map((i) => ({
               number: i.number,

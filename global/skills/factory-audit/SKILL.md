@@ -32,6 +32,28 @@ mode of this feature is not missing a problem — it is filing thirty speculativ
 ones, at which point a human turns the whole thing off and you lose the twenty-
 ninth that was real.
 
+## Read the repo's own memory first
+
+Before looking at a single file, read `CLAUDE.md` and `LEARNINGS.md` if the repo
+has them, and the `NOTES` line in your prompt if one is set.
+
+This is not politeness — it is the difference between a useful audit and one
+that gets switched off. A mature repo has usually already *decided* things an
+audit would otherwise "find":
+
+- **Drift that is known and accepted.** A repo may state outright that certain
+  docs have drifted and that the code is the source of truth. Re-reporting that
+  every cycle is noise, and it buries the one genuinely new thing you found.
+- **A constraint that looks like a defect.** A pinned-below-recommended value, a
+  dependency held back, a rule that reads as wrong until you see the incident
+  that produced it. If the repo explains why, it is not a finding.
+- **A deliberate omission.** Something absent on purpose, recorded as such.
+
+If your finding contradicts a written decision, that can still be worth filing —
+but file it as *"this decision may no longer hold, and here is what changed"*,
+naming the decision. That is a different and much more useful issue than
+reporting the decision as a fresh discovery.
+
 ## Before filing
 
 **Search the open issues first**, including closed ones from the last few months.

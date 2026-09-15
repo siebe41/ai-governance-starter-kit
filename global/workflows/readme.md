@@ -21,6 +21,7 @@ Claude subscription has spare, and files its own work through scheduled audits.
 | `factory-conductor.yml` | hourly cron | Asks the governor whether there is headroom, picks that many issues off the queue, claims each in the ledger, dispatches a worker. Runs no model itself. |
 | `factory-worker.yml` | dispatched by the conductor | Runs **one** issue under a turn allowance and a deadline, then opens a pull request or escalates. Records the outcome in the ledger. |
 | `factory-audit.yml` | daily cron | Runs a read-only audit (security, accessibility, SEO, dependencies, docs drift) and files findings as issues into the same queue. Changes no code. |
+| `factory-retro.yml` | weekly cron | Joins the ledger with what GitHub says happened to those issues and publishes a report. `contents: read` + `issues: read` only — it **reports, it never tunes**. |
 
 They depend on the engine in [`global/factory/`](../factory/readme.md), which the
 sync tool deploys to `.factory/` whenever any `factory-*` workflow ships. Full

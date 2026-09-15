@@ -13,6 +13,7 @@ Operating guide, setup and tuning: [`docs/factory-playbook.md`](../../docs/facto
 | `scripts/governor.mjs` | The admission decision. `--self-test` proves the policy. |
 | `scripts/factory.mjs` | Operator + workflow CLI: `status`, `claim`, `record`, `release`, `pause`, `resume`. `--self-test` proves the log parser. |
 | `scripts/hostcheck.mjs` | Host capacity preflight — load, available memory, free disk. `--self-test` proves the thresholds. |
+| `scripts/retro.mjs` | Weekly report joining the ledger with GitHub outcomes. Read-only by construction — it reports, it never tunes. `--self-test` proves the arithmetic. |
 
 Node 20+ stdlib only — no `npm install`, nothing to audit, nothing to keep
 patched. That is deliberate: this code runs with repository credentials on a
@@ -52,8 +53,9 @@ Both scripts carry their own assertions and need no repo, branch, or network:
 node .factory/scripts/governor.mjs  --self-test   # admission policy
 node .factory/scripts/factory.mjs   --self-test   # execution-log parsing
 node .factory/scripts/hostcheck.mjs --self-test   # host capacity thresholds
+node .factory/scripts/retro.mjs     --self-test   # retro arithmetic and rendering
 ```
 
-Run all three after touching any of them. The governor's self-test is the specification of
+Run all four after touching any of them. The governor's self-test is the specification of
 the admission policy in executable form — if you change a rule, change its
 assertion in the same commit.
