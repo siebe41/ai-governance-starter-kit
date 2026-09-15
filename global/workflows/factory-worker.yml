@@ -207,10 +207,19 @@ jobs:
           DEPS_OUTCOME: ${{ steps.deps.outcome }}
           REPO: ${{ github.repository }}
         run: |
-          # NOT `set -e`. The CLI exits non-zero when it reaches --max-turns,
-          # and that run still did real work and produced real usage numbers we
-          # are obliged to record. The exit code is data here, not a reason to
-          # abandon the job.
+          # `set +e` EXPLICITLY, and it is load-bearing. GitHub invokes this
+          # script as `bash -e {0}`, so errexit is already on before the first
+          # line runs — `set -uo pipefail` does not clear it, and writing a
+          # comment saying "not set -e" certainly does not. Without this the
+          # step aborts the instant the CLI exits non-zero for max turns, before
+          # writing a single output, which is exactly what happened on the first
+          # real run: turns, cost and exit code were all lost, the ledger charged
+          # a guess, and the escalation misreported a run that had genuinely
+          # worked as "the CLI produced no result at all".
+          #
+          # The CLI's non-zero exit is DATA here. It still did real work and
+          # still printed accurate usage numbers we are obliged to record.
+          set +e
           set -uo pipefail
 
           # The issue title and body are UNTRUSTED text — anyone who can file an
@@ -251,8 +260,10 @@ jobs:
             > "$RUNNER_TEMP/claude-run.json" 2> "$RUNNER_TEMP/claude-run.err"
           CLI_EXIT=$?
 
-          echo "execution_file=$RUNNER_TEMP/claude-run.json" >> "$GITHUB_OUTPUT"
-          echo "cli_exit=$CLI_EXIT" >> "$GITHUB_OUTPUT"
+          {
+            echo "execution_file=$RUNNER_TEMP/claude-run.json"
+            echo "cli_exit=$CLI_EXIT"
+          } >> "$GITHUB_OUTPUT"
 
           # The CLI writes a complete result object to stdout even when it exits
           # non-zero for max turns, so the accounting survives a failed run —
@@ -289,6 +300,10 @@ jobs:
         id: work
         if: always() && steps.host.outputs.ok == 'true'
         run: |
+          # Same `bash -e {0}` trap as the run step above: without `set +e` a
+          # git command that exits non-zero kills the step before it writes the
+          # outputs every terminal step below reads.
+          set +e
           set -uo pipefail
           # Anything left uncommitted is still work: commit it rather than throw
           # it away, so a run that edited files and then ran out of turns before
@@ -447,7 +462,20 @@ jobs:
             // Naming which one happened is the difference between a reader
             // fixing it and a reader digging through a log to find out.
             let diagnosis;
-            if (process.env.PARSED !== 'true') {
+            // Checked FIRST, because it is the case that looks most like a
+            // failure and is least like one: the run did the work, the branch is
+            // pushed and waiting, and only the final API call was refused. On
+            // the first real run this branch did not exist, so an escalation
+            // told the reader the CLI had never taken a turn while a correct,
+            // complete fix sat on a pushed branch nobody was pointed at.
+            if (process.env.COMMITS && process.env.COMMITS !== '0') {
+              diagnosis =
+                `**The work exists.** This run produced ${process.env.COMMITS} commit(s), and the branch \`${process.env.FACTORY_BRANCH}\` ` +
+                'was pushed successfully — only opening the pull request failed. The usual cause is the repository setting ' +
+                '*Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and approve pull requests"*, ' +
+                'which is off by default and cannot be granted from inside the workflow. ' +
+                'Until it is enabled, every run will end here. Open a pull request from that branch by hand to recover this run.';
+            } else if (process.env.PARSED !== 'true') {
               diagnosis =
                 'The CLI produced no result at all, so the run never got as far as a first turn. ' +
                 'This is a workflow, credential or environment problem rather than a task the model could not do — ' +
@@ -470,7 +498,9 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo, issue_number,
               body: [
-                '**Factory run produced no pull request.**',
+                (process.env.COMMITS && process.env.COMMITS !== '0')
+                  ? '**Factory run did the work but could not open a pull request.**'
+                  : '**Factory run produced no pull request.**',
                 '',
                 `Task class \`${process.env.TASK_CLASS}\` — allowance ${process.env.MAX_TURNS} turns / ${process.env.DEADLINE_MINUTES} minutes.`,
                 `Turns used: ${process.env.NUM_TURNS || 'unknown'} · CLI exit: \`${process.env.CLI_EXIT || 'n/a'}\` · commits: ${process.env.COMMITS || '0'}`,
