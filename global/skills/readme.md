@@ -31,15 +31,15 @@ The three engineering-discipline skills are adapted from [obra/superpowers](http
 
 ## 🚫 Deliberately Not Included: `ai-ready`
 
-[awesome-copilot's `ai-ready` skill](https://awesome-copilot.github.com/skill/ai-ready/) is a thin wrapper whose entire job is telling the user to run `/skills add johnpapa/ai-ready` — installing a ~600-line, frequently-changing skill from a third-party repo at runtime. This kit's own `00-security-governance.md` says "No Untrusted Dependencies: Do not introduce third-party packages or libraries without verifying their license and security posturing" — vendoring a wrapper whose function is "auto-install an unreviewed external skill" would violate that rule from inside the kit that states it. It's also redundant: `ai-ready`'s stated purpose (generate `AGENTS.md`/`copilot-instructions.md`/CI config customized to your stack) is what `tooling/sync_configs.py` already does, natively and reviewed, for this kit. If you specifically want the upstream `johnpapa/ai-ready` skill, install it directly per its own instructions — just know it sits outside this kit's review process.
+[awesome-copilot's `ai-ready` skill](https://awesome-copilot.github.com/skill/ai-ready/) is a thin wrapper whose entire job is telling the user to run `/skills add johnpapa/ai-ready` — installing a ~600-line, frequently-changing skill from a third-party repo at runtime. This kit's own `00-security-governance.md` says "No Untrusted Dependencies: Do not introduce third-party packages or libraries without verifying their license and security posturing" — vendoring a wrapper whose function is "auto-install an unreviewed external skill" would violate that rule from inside the kit that states it. It's also redundant: `ai-ready`'s stated purpose (generate `AGENTS.md`/`copilot-instructions.md`/CI config customized to your stack) is what `tooling/aigov.py` already does, natively and reviewed, for this kit. If you specifically want the upstream `johnpapa/ai-ready` skill, install it directly per its own instructions — just know it sits outside this kit's review process.
 
 ---
 
 ## 🚀 Deployment Behavior
 
-Each subfolder here is one skill: a `SKILL.md` (frontmatter `name` + `description`, then the procedure), optionally with a `scripts/` folder or other reference files it uses. When synchronized via `tooling/sync_configs.py`, every skill subfolder is copied wholesale into **`.claude/skills/<name>/`** in the target repo — `readme.md` is not a skill folder, so it's naturally skipped (only directories are copied, not loose files).
+Each subfolder here is one skill: a `SKILL.md` (frontmatter `name` + `description`, then the procedure), optionally with a `scripts/` folder or other reference files it uses. aigov copies every skill folder wholesale to `.github/skills/<name>/` for GitHub Copilot or `.claude/skills/<name>/` for Claude Code (once, to `.claude/skills/`, when a repo uses both, since Copilot reads that folder too). See [`TARGETS.md`](/TARGETS.md). `readme.md` is not a skill folder, so it's never deployed.
 
-Claude Code discovers skills under `.claude/skills/` automatically and decides on its own when a skill's `description` matches the current task — there's no manual invocation step, unlike prompts or agents.
+GitHub Copilot and Claude Code discover skills in their skills folders automatically and decide on their own when a skill's `description` matches the current task. You can also run one by name (`/skill-name`).
 
 ---
 

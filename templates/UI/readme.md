@@ -1,6 +1,6 @@
 # 🎨 UI / Frontend Domain Overlay
 
-Selected via `python tooling/sync_configs.py --templates UI` (or picked from the interactive menu). Overlays on top of `global/` — it doesn't replace anything, it adds frontend-specific rules on top of the baseline security/coding/testing guardrails.
+Selected at `aigov.py install` (or by adding `"UI"` to `templates` in `.ai-governance.json` and running `sync`). For GitHub Copilot it's written to `.github/instructions/ui-a11y.instructions.md` and only loads for the front-end file types in `overlay.json`. Overlays on top of `global/` — it doesn't replace anything, it adds frontend-specific rules on top of the baseline security/coding/testing guardrails.
 
 ---
 

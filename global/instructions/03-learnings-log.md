@@ -52,7 +52,7 @@ Keep entries short and actionable — this file is a checklist for future sessio
 
 ## 🚀 Deployment Behavior
 
-During deployment (`python tooling/sync_configs.py`), an empty `LEARNINGS.md` template is seeded at the target repository root **only if one does not already exist**, so accumulated learnings are never overwritten by re-running the sync.
+The governance kit creates `LEARNINGS.md` at the repository root once, **only if it does not already exist**, and never overwrites or deletes it. Accumulated learnings survive every update.
 
 ## 🧠 Claude Code: Prefer the Skill
 

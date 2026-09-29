@@ -16,14 +16,14 @@ This folder contains task-specific system prompt templates designed to enforce c
 
 ## 🚀 Deployment Behavior
 
-When synchronized via `tooling/sync_configs.py`, markdown files in this directory are copied directly to **`.vscode/prompts/`** for native selection inside VS Code and Copilot Chat interfaces. `readme.md` itself is skipped during deployment.
+aigov writes each prompt as `.github/prompts/<name>.prompt.md` for GitHub Copilot and `.claude/commands/<name>.md` for Claude Code, adding a `description` taken from the prompt's first heading (see [`TARGETS.md`](/TARGETS.md)). `readme.md` itself is never deployed.
 
 ---
 
 ## 🕹️ How to Use Each Prompt
 
 ### Code Review / Generate Unit Tests / Refactor Clean Code
-Select the prompt file directly from your IDE's prompt picker (`.vscode/prompts/` in VS Code / Copilot Chat), or paste its contents in as a one-off system prompt. Each is self-contained — no setup required, no other prompt depends on them.
+Run it by name: `/code-review` in Copilot Chat or Claude Code, or pick it from the prompt picker. You can also paste its contents in as a one-off system prompt. Each is self-contained — no setup required, no other prompt depends on them.
 
 ### Spec-Driven Development (`spec-driven-development.md`)
 Use this **first**, before any implementation work, on any feature that's non-trivial:

@@ -6,7 +6,40 @@ All notable changes to this starter kit are documented here. Versions follow [Se
 * **minor** — new instructions, agents, prompts, or templates that are additive.
 * **patch** — wording fixes, doc corrections, no behavioral change.
 
-Every change to `global/`, `templates/`, or `tooling/sync_configs.py` should bump this file and `VERSION` — see `CONTRIBUTING.md`.
+Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this file and `VERSION` — see `CONTRIBUTING.md`.
+
+---
+
+## [2.0.0]
+
+Breaking: output paths changed, and the entry point is now `tooling/aigov.py`. Existing repos move with `python tooling/aigov.py migrate` (once).
+
+### Why
+v1 wrote files for every AI tool whether a repo used it or not, and some of those paths aren't read by any tool: prompts went to `.vscode/prompts/*.md` (VS Code reads `.github/prompts/*.prompt.md`), agents went to `.copilot/agents/*.yml` (Copilot reads `.github/agents/*.agent.md`), and `.copilot/mcp.json` isn't read from a repo. It also merged `global/instructions/readme.md` into every generated instructions file and pasted domain overlays into every request.
+
+### Added
+- `tooling/aigov.py` with `install`, `sync` (plus `--check` for CI), `migrate`, and `status`.
+- **Targets.** Each repo chooses its AI tool(s): `copilot`, `claude-code`, or both. aigov writes only for those tools, only to paths their vendors document. `TARGETS.md` lists every path with a doc link.
+- **Refuse, don't guess.** No tool chosen, a file that exists but wasn't written by aigov, a generated file edited by hand, a v1 file whose content doesn't match what v1 wrote: each stops the run before anything is changed. `--force` only ever overrides hand edits to files aigov wrote.
+- **Generated-file record.** `.ai-governance.json` now records every file aigov wrote, with a line-ending-insensitive SHA-256. `sync` uses it to remove files you've excluded (closing v1's "doesn't prune" limitation), and `migrate` uses it to delete only what it can prove it wrote.
+- `migrate` detects v1 output (by the v1 header or by exact match with the kit source it was copied from), shows what it will replace, and asks for confirmation (`--yes` for scripts).
+- Domain overlays for Copilot are written as path-scoped `.github/instructions/<domain>-<name>.instructions.md`. New optional `templates/<Domain>/overlay.json` sets the `applyTo` glob; `templates/UI/overlay.json` scopes the accessibility rules to front-end file types.
+- Claude Code gets agents (`.claude/agents/`), commands (`.claude/commands/`), and MCP (`.mcp.json`), converted from the same sources.
+
+### Changed
+- Copilot outputs: `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/<name>.prompt.md`, `.github/agents/<name>.agent.md`, `.github/skills/<name>/`, `.vscode/mcp.json`.
+- Agents in `.yml` are converted to each tool's Markdown agent format; `.agent.md` files are copied as-is for Copilot.
+- Prompts get a `description` frontmatter line from their first heading.
+- Skills are written once to `.claude/skills/` when a repo uses both tools (Copilot reads that folder too).
+- `readme.md` files are never deployed from any category.
+- `--output` defaults to the current folder, and aigov refuses to write into the kit itself. The v1 advice to edit `REPO_ROOT` for embedded setups no longer applies.
+
+### Removed
+- `.copilot/agents/`, `.copilot/mcp.json`, and `.vscode/prompts/` outputs.
+- `--reconfigure` and `--templates` on sync. Use `install` for a new repo, `migrate` to change tools, and edit `templates` in `.ai-governance.json` then `sync` to change overlays.
+
+### Deprecated
+- `tooling/sync_configs.py`: now a thin wrapper that runs `aigov.py sync` for v2 repos. Removed in the next major release.
 
 ---
 

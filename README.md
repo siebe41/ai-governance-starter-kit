@@ -13,221 +13,136 @@ A production-ready reference architecture and modular configuration framework de
 
 ## 🎯 Purpose & Architecture Overview
 
-This repository operates on a **Single Source of Truth, Multi-Target Deployment** model. Rather than manually copying and maintaining separate AI rules across multiple IDEs or repositories, everything is defined centrally and deployed via automation:
-
-
-```
+This repository operates on a **Single Source of Truth, Multi-Target Deployment** model. You write your AI rules, prompts, agents, skills, and MCP servers once, in `global/`. `tooling/aigov.py` then writes them into each project repo, in the exact place **the AI tool that project uses** reads them from.
 
 ```text
-                  +----------------------------------+
-                  |   global/ (Canonical Source)     |
-                  |  ├── instructions/               |
-                  |  ├── prompts/                    |
-                  |  ├── agents/                     |
-                  |  ├── skills/                     |
-                  |  └── mcp/                        |
-                  +----------------+-----------------+
+          global/  +  templates/<Domain>/  +  the project's local_dirs
                                    |
-                                   v
-                  +----------------------------------+
-                  |   templates/ (Domain Overlays)   |
-                  |  ├── Cloud/                      |
-                  |  ├── UI/                         |
-                  |  └── DevOps/                     |
-                  +----------------+-----------------+
+                        tooling/aigov.py
+            (asks which AI tool; writes only for that tool)
                                    |
-                                   v
-                  +----------------------------------+
-                  |   tooling/sync_configs.py        |
-                  +----------------+-----------------+
-                                   |
-    +------------------+------------------+------------------+------------------+
-    |                  |                  |                  |                  |
-    v                  v                  v                  v
-
-+---------------+  +---------------+  +---------------+  +---------------+
-|   .github/    |  |   CLAUDE.md   |  |   .vscode/    |  |   .copilot/   |
-| (Copilot      |  |  .claude/     |  | (Prompts &    |  | (Agent roles  |
-|  Instructions)|  |  skills/      |  |  MCP config)  |  | & MCP config) |
-+---------------+  +---------------+  +---------------+  +---------------+
-
-Every deploy is governed by a per-repo `.ai-governance.json`: which domain
-templates are active, which individual files are excluded, and which
-project-local folders are merged in as "bring your own" additions. See
-"Include/Exclude & Bring Your Own" below.
+          +------------------------+------------------------+
+          |                                                 |
+   GitHub Copilot                                     Claude Code
+   .github/copilot-instructions.md                    CLAUDE.md
+   .github/instructions/*.instructions.md             .claude/commands/*.md
+   .github/prompts/*.prompt.md                        .claude/agents/*.md
+   .github/agents/*.agent.md                          .claude/skills/<name>/
+   .github/skills/<name>/                             .mcp.json
+   .vscode/mcp.json
 ```
+
+**How aigov decides where things go:** each item goes to the one path its tool documents. Nothing is written for a tool the repo doesn't use, and nothing is written to a path no tool reads. The complete table, with a vendor-doc link for every row, is in [`TARGETS.md`](/TARGETS.md).
+
+**How aigov stays safe:** it never guesses. If a choice hasn't been made, or a run would overwrite or delete a file it can't prove it wrote, it stops, explains why, and changes nothing. Every file it writes is recorded in the project's `.ai-governance.json` with a content fingerprint, and it only ever deletes files on that list that nobody has edited.
 
 ---
 
 ## 🏗️ Folder Hierarchy
 
-
-```
-
+```text
 ai-governance-starter-kit/
+├── TARGETS.md                 # Exactly where each item lands, per AI tool, and why
 ├── docs/                      # Governance playbook & architecture diagrams
-│   ├── governance-playbook.md
-│   └── architecture-diagrams.md
-│
 ├── global/                    # 🎯 CANONICAL SINGLE SOURCE OF TRUTH
 │   ├── instructions/          # 00-security-governance.md, 01-coding-standards.md, etc.
-│   ├── prompts/               # code-review.md, generate-unit-tests.md, refactor.md
-│   ├── agents/                # coordinator.yml, validator.yml, researcher.yml
-│   ├── skills/                # test-driven-development/, using-git-worktrees/, ...
-│   ├── mcp/                   # mcp-servers.json (Central MCP server registry)
-│   └── LEARNINGS.template.md  # Seed file for the per-repo mistakes/learnings log
-│
-├── templates/                 # 🎨 DOMAIN-SPECIFIC OVERLAYS
-│   ├── UI/                    # Populated: instructions/a11y.md (WCAG 2.2 AA)
-│   ├── Cloud/                 # Not yet populated — pattern only
-│   └── DevOps/                # Not yet populated — pattern only
-│
-└── tooling/                   # 🛠️ DEPLOYMENT ENGINE
-└── sync_configs.py        # Python sync engine (interactive menu & CLI)
-
+│   ├── prompts/               # code-review.md, generate-unit-tests.md, ...
+│   ├── agents/                # coordinator.yml, plan.yml, ... (or *.agent.md)
+│   ├── skills/                # test-driven-development/, learnings-log/, ...
+│   ├── mcp/                   # mcp-servers.json (central MCP server registry)
+│   └── LEARNINGS.template.md  # Seed for each repo's mistakes/learnings log
+├── templates/                 # 🎨 DOMAIN OVERLAYS (opt-in per repo)
+│   └── UI/                    # instructions/a11y.md (WCAG 2.2 AA) + overlay.json (applyTo)
+└── tooling/
+    ├── aigov.py               # 🛠️ install / sync / migrate / status
+    └── sync_configs.py        # Deprecated v1 entry point; forwards to `aigov.py sync`
 ```
 
 ---
 
 ## 🏗️ Pre-Onboarding Setup: Fork vs. Subtree
 
-Before onboarding developers to use this toolset, your organization should choose how to integrate this repository into your development lifecycle:
+Before onboarding developers, choose how projects get the kit. Either way, aigov reads its sources from the kit folder it lives in and writes into the project you point it at (`--output`, or the current folder). No path editing is needed.
 
 ### Option A: Central Standalone Repository (Recommended for Org-Wide Adoption)
-Fork or clone this repository to a central location on your internal Git server (e.g., `github.com/YOUR_ORG/ai-governance`). IT admins customize the global security rules, and developers run the sync script to generate local tooling configs across their projects.
+Fork or clone this repository to your internal Git server (e.g. `github.com/YOUR_ORG/ai-governance`). IT admins customize `global/`; developers run aigov against their own project repos.
 
 ```bash
-git clone [https://github.com/YOUR_ORG/ai-governance.git](https://github.com/YOUR_ORG/ai-governance.git)
-cd ai-governance
-
+git clone https://github.com/YOUR_ORG/ai-governance.git
+python ai-governance/tooling/aigov.py install --output path/to/your-project
 ```
 
-### Option B: Embedded Sub-Repository / Subtree (Recommended for Individual App Repos)
-
-Embed this kit directly into an existing application repository so governance rules travel alongside source code.
-
-#### Git Subtree Method (Recommended):
+### Option B: Embedded Subtree (Recommended for Individual App Repos)
 
 ```bash
 cd /path/to/your-application-repo
-git subtree add --prefix vendor/ai-governance [https://github.com/Siebe41/ai-governance-starter-kit.git](https://github.com/Siebe41/ai-governance-starter-kit.git) main --squash
-
+git subtree add --prefix vendor/ai-governance https://github.com/YOUR_ORG/ai-governance.git main --squash
+python vendor/ai-governance/tooling/aigov.py install
 ```
 
-#### Git Submodule Method:
-
-```bash
-git submodule add [https://github.com/Siebe41/ai-governance-starter-kit.git](https://github.com/Siebe41/ai-governance-starter-kit.git) vendor/ai-governance
-
-```
-
-> **Note for Embedded Setups:** If embedded as a sub-folder (e.g., `vendor/ai-governance/`), update `REPO_ROOT` inside `tooling/sync_configs.py` so output files write to your parent repository root:
-> ```python
-> REPO_ROOT = SCRIPT_DIR.parent.parent.parent
-> 
-> ```
-> 
-> 
+A submodule (`git submodule add ... vendor/ai-governance`) works the same way.
 
 ---
 
-## ⚡ Developer Onboarding & Deployment
+## ⚡ Commands
 
-Once configured by your admin team, onboarding a developer is as simple as running the deployment engine.
+| Command | When | What it does |
+| --- | --- | --- |
+| `aigov.py install` | Once per repo | Asks which AI tool(s) the repo uses and which domain overlays it wants, then writes only those files. Refuses if the repo is already installed or has v1 files. |
+| `aigov.py sync` | Whenever the kit's rules change | Rewrites the same files from the current kit. Never asks questions, so it's safe in CI. Removes files you've since excluded. |
+| `aigov.py sync --check` | In CI | Changes nothing; fails if any generated file is out of date or was hand-edited. |
+| `aigov.py migrate` | Changing or adding a tool, or moving a v1 repo | Asks for the new tool choice, shows what it will write and remove, asks for confirmation, then does it. |
+| `aigov.py status` | Any time | Lists the repo's tools and the state of every file aigov wrote (`ok`, `edited`, `missing`). |
 
-### Option 1: Interactive Onboarding Menu (Recommended)
+Non-interactive use (CI, scripts): pass the answers as flags, e.g. `install --targets copilot --templates UI` or `migrate --targets copilot claude-code --yes`. Without a terminal and without those flags, aigov refuses rather than assuming.
 
-Run the script without arguments to open an interactive selection menu where developers can pick domain overlays matching their current tasks:
+### What aigov refuses to do
 
-```bash
-python tooling/sync_configs.py
+* Run `sync` when no AI tool has been chosen.
+* Overwrite a file that exists but wasn't written by aigov (e.g. a hand-written `.github/copilot-instructions.md`). Move or rename it first.
+* Overwrite or delete a file aigov wrote that someone has since edited. `--force` discards those edits; it still never touches files aigov didn't write.
+* Replace v1 files whose content doesn't match what the v1 kit wrote, unless you pass `--force` after saving anything you need.
+* Delete `LEARNINGS.md`, ever.
 
-```
+Every refusal happens before anything is written, so a refused run leaves the repo exactly as it was.
 
-**Interactive Example:**
+### Example: `install` for a Copilot repo
 
 ```text
-========================================================
- 🛠️  AI Configuration Deployment Menu
-========================================================
+Which AI tool(s) does this repo use?
+  [1] copilot      GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI)
+  [2] claude-code  Claude Code
+  [3] both
+Your selection: 1
 
-Available Domain Templates:
-  [0] None (Deploy Global configuration only)
-  [1] Cloud
-  [2] DevOps
-  [3] UI
+Domain overlays to add on top of the Global rules:
+  [0] none
+  [1] UI
+Your selection (e.g. '1 2', Enter for none): 1
 
-Select templates to overlay on top of Global.
-  • Enter numbers separated by spaces or commas (e.g. '1, 3' or '1 2')
-  • Press ENTER or type '0' for Global only
+GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI): 65 file(s)
+  [+] .github/agents/plan.agent.md
+  [+] .github/copilot-instructions.md
+  [+] .github/instructions/ui-a11y.instructions.md
+  [+] .github/prompts/code-review.prompt.md
+  [+] .vscode/mcp.json
+  [+] .github/skills/learnings-log/  (1 file)
+  ...
 
-Your selection: 1, 3
-
-🚀 Starting AI Configuration Sync...
-📍 Target Output: /workspace/your-project
-🎨 Selected Templates: Cloud, UI
-
-📦 Deploying .github Configuration...
-  [+] Generated: .github/copilot-instructions.md
-
-📦 Deploying Claude Code Configuration...
-  [+] Generated: CLAUDE.md
-
-📦 Deploying .vscode Configuration...
-  [+] Copied VS Code Prompt: code-review.md
-  [+] Copied VS Code Prompt: generate-unit-tests.md
-
-📦 Deploying .copilot Configuration...
-  [+] Copied Copilot Agent: coordinator.yml
-  [+] Copied Copilot Agent: validator.yml
-
-📦 Deploying Claude Skills...
-  [+] Copied Claude Skill: test-driven-development/
-  [+] Copied Claude Skill: using-git-worktrees/
-
-📦 Deploying Global MCP Servers...
-  [+] Generated VS Code MCP Config: .vscode/mcp.json
-  [+] Generated Copilot Agent MCP Config: .copilot/mcp.json
-
-📦 Seeding Learnings Log...
-  [+] Seeded: LEARNINGS.md
-  [+] Saved selection to .ai-governance.json — edit `exclude` to drop individual assets, or `local_dirs` to add your own, then re-run the sync.
-
-✅ AI Configuration Sync Completed Successfully!
-
-```
-
----
-
-### Option 2: Command Line (Automation & CI/CD)
-
-Bypass the interactive menu during automated setups or CI/CD pipelines using CLI flags:
-
-```bash
-# 1. Deploy Global rules ONLY (no domain overlays)
-python tooling/sync_configs.py --templates
-
-# 2. Deploy Global + Cloud domain overlay
-python tooling/sync_configs.py --templates Cloud
-
-# 3. Deploy Global + multiple domain overlays (Cloud and UI)
-python tooling/sync_configs.py --templates Cloud UI
-
-# 4. Output configs directly into a specific project directory
-python tooling/sync_configs.py --templates Cloud DevOps --output /path/to/target-repo
-
+Note: Copilot's cloud agent on github.com doesn't read MCP servers from a file. Configure them in the repo's Settings > Copilot > MCP servers.
 ```
 
 ---
 
 ## 🧩 Include/Exclude & Bring Your Own
 
-Domain templates (`--templates Cloud UI`) select whole bundles. For finer control — dropping one instruction, prompt, agent, or skill you don't want, or adding your own without touching the vendored kit — every sync writes a `.ai-governance.json` at the target repo root and reads it back on the next run:
+Every project's `.ai-governance.json` holds its choices plus the record of what aigov wrote. Commit it so teammates and CI apply the same selection.
 
 ```json
 {
-  "version": 1,
-  "templates": ["Cloud"],
+  "version": 2,
+  "targets": ["copilot"],
+  "templates": ["UI"],
   "exclude": {
     "instructions": [],
     "prompts": ["caveman-mode.md"],
@@ -239,38 +154,35 @@ Domain templates (`--templates Cloud UI`) select whole bundles. For finer contro
     "prompts": [],
     "agents": [],
     "skills": ["governance-local/skills"]
-  }
+  },
+  "generated": { "...": "written by aigov; don't edit" }
 }
 ```
 
-* **`exclude`** — filenames (or, for `skills`, folder names) to skip on every future sync. Nothing here is deleted from `global/`; it's just not deployed to *this* project. Edit the list, re-run `python tooling/sync_configs.py` (no flags needed — it reuses this file), done.
-* **`local_dirs`** — extra folders, relative to your project root, merged in alongside the canonical `global/` assets for each category. Drop a `governance-local/instructions/04-team-conventions.md` or `governance-local/skills/my-skill/SKILL.md` in your own project, list the parent folder here, and it deploys on every sync exactly like a canonical asset — including through `--exclude` if you ever want to turn it off. Because these files live outside the vendored `vendor/ai-governance/` (or wherever you cloned the kit), they survive `git subtree pull`/`submodule update` without merge conflicts.
-* **`--reconfigure`** — ignore a saved `.ai-governance.json` and re-run template selection from scratch (also resets `exclude`/`local_dirs` to empty; hand-edit them back in if you still want them).
-* Passing `--templates` explicitly on the command line always wins over a saved selection, for CI/automation use.
-
-**Known limitation:** excluding something already deployed doesn't retroactively delete the file a previous sync wrote (e.g. a `.copilot/agents/*.yml` you previously synced) — the tool only adds/updates, it doesn't prune. Remove the stale file by hand once after changing `exclude`.
-
-`.ai-governance.json` is project configuration, not a build artifact — commit it in your project so teammates and CI apply the same selection.
+* **`targets`**: the AI tools this repo uses. Change it with `migrate`, not by hand, so old files get cleaned up.
+* **`templates`**: domain overlays. Edit the list and run `sync`.
+* **`exclude`**: source filenames (folder names for `skills`) to leave out of this repo. Edit and run `sync`; files it previously wrote for them are removed.
+* **`local_dirs`**: project folders merged in alongside `global/`, so project-specific rules survive kit updates. For `instructions`, this is the project's Repo layer.
+* **`generated`**: aigov's record of every file it wrote, with a fingerprint. Don't edit it.
 
 ---
 
 ## 🧠 Included Skills
 
-`global/skills/` ships [Claude Code Skills](https://github.com/obra/superpowers) — procedural `SKILL.md` files Claude Code loads and self-triggers by description, deployed to `.claude/skills/<name>/`. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from `obra/superpowers`, MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+`global/skills/` ships agent skills: procedural `SKILL.md` folders that both GitHub Copilot and Claude Code load and self-trigger by description. aigov writes them to `.github/skills/<name>/` for Copilot, `.claude/skills/<name>/` for Claude Code, or once to `.claude/skills/` when a repo uses both (Copilot reads that folder too). Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from [obra/superpowers](https://github.com/obra/superpowers), MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
 
 ---
 
 ## 🔌 Global MCP Integration
 
-Model Context Protocol (MCP) server definitions are centrally managed in `global/mcp/mcp-servers.json`. During synchronization, the script formats and deploys these definitions directly into `.vscode/mcp.json` and `.copilot/mcp.json`.
+MCP server definitions live in `global/mcp/mcp-servers.json`. aigov writes them to `.vscode/mcp.json` for Copilot in VS Code and `.mcp.json` for Claude Code. Copilot's cloud agent on github.com reads MCP servers from the repo's **Settings > Copilot > MCP servers** page instead of a file, so that one step is manual.
 
-Secrets (e.g., Azure DevOps PATs or GitHub Tokens) are injected using standard environment variable placeholders (e.g., `${AZURE_DEVOPS_PAT}`), keeping credentials safely out of source control.
-
+Keep secrets out of the file by using environment-variable placeholders. aigov copies values exactly as written, and the placeholder syntax differs between tools, so write them in the form your tools expect (see [`TARGETS.md`](/TARGETS.md)).
 ---
 
 ## 🧩 Included Workflow Methodologies
 
-Beyond the baseline security/coding/testing guardrails, `global/agents/` and `global/prompts/` package a few opt-in agentic workflow patterns engineers can select via the sync menu or by wiring the prompt/agent file into their tool of choice:
+Beyond the baseline security/coding/testing guardrails, `global/agents/` and `global/prompts/` package a few opt-in agentic workflow patterns engineers get through aigov (and can drop with `exclude`) or by wiring the prompt/agent file into their tool of choice:
 
 | Methodology | Type | File | Summary |
 | :--- | :--- | :--- | :--- |
@@ -291,9 +203,9 @@ Step-by-step usage instructions (setup, invocation, and when to prefer which pat
 
 `global/instructions/03-learnings-log.md` requires AI assistants to read a per-repo `LEARNINGS.md` file before starting work, and to append to it whenever they're corrected or hit a non-obvious gotcha — so the same mistake never has to be corrected twice.
 
-* On sync, `global/LEARNINGS.template.md` is seeded as `LEARNINGS.md` at the target repo root — but only if that file doesn't already exist, so accumulated entries survive re-syncs.
+* On install, `global/LEARNINGS.template.md` is seeded as `LEARNINGS.md` at the project root, only if it doesn't exist. aigov never tracks, overwrites, or deletes it, so accumulated entries survive every sync and migration.
 * Entries follow a fixed `Context` / `Mistake / Gotcha` / `Correct Pattern` format, kept short enough to act as a pre-flight checklist rather than a changelog.
-* On Claude Code, `global/skills/learnings-log/` enforces this as a self-triggering Skill (fires at task start and right after a correction) instead of relying on the instructions file being noticed inside a large concatenated `CLAUDE.md`.
+* On Claude Code, `global/skills/learnings-log/` enforces this as a self-triggering Skill (fires at task start and right after a correction) instead of relying on the instructions file being noticed inside a large concatenated instructions file.
 
 ---
 

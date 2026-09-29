@@ -1,0 +1,3 @@
+{
+  "applyTo": "**/*.{html,htm,css,scss,sass,less,js,jsx,ts,tsx,vue,svelte,cshtml,razor,xaml}"
+}

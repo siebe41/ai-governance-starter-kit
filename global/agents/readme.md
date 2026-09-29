@@ -51,7 +51,7 @@ Bundled with `global/skills/ai-team-orchestration/`, which defines the default P
 
 ## 🚀 Deployment Behavior
 
-When synchronized via `tooling/sync_configs.py`, these YAML files are packaged into **`.copilot/agents/`** for custom agent execution. `readme.md` itself is skipped during deployment — only real agent definitions land in the target repo.
+aigov converts each agent to the format of the AI tool(s) a repo uses: `.github/agents/<name>.agent.md` for GitHub Copilot and `.claude/agents/<name>.md` for Claude Code (see [`TARGETS.md`](/TARGETS.md)). `readme.md` itself is never deployed.
 
 ---
 
@@ -104,11 +104,12 @@ Both are single-shot custom agents like Coordinator/Validator/Researcher — inv
 
 ---
 
-## 📐 Why YAML, Not Markdown?
+## 📐 Source Format
 
-Every file in this folder is YAML, matching `coordinator.yml`/`validator.yml`. This isn't inconsistent with `global/prompts/` being Markdown; it's required by the deployment target each folder feeds:
+Agents here are written in one of two forms, and aigov converts both for each tool:
 
-* `global/agents/` → `.copilot/agents/*.yml` (GitHub Copilot's custom-agent config format is YAML).
-* `global/prompts/` → `.vscode/prompts/*.md` (VS Code / Copilot Chat prompt files are Markdown).
+* **`.yml`** with `agent.name`, `agent.description`, and an `agent.system_prompt: |` block. This is the kit's neutral format. `allowed_skills` is informational and not deployed.
+* **`.agent.md`**, GitHub Copilot's native format (frontmatter + Markdown body). Copied as-is for Copilot, and converted for Claude Code.
 
-`build_copilot_target()` in `tooling/sync_configs.py` glob-copies this folder's contents as-is, so every file here needs to already be valid Copilot agent YAML. If you need an agent's behavior as a Markdown system prompt for a tool that expects one (e.g. a Claude Code subagent `.md` file with frontmatter), copy the `system_prompt:` block out of the YAML — it's plain text, written to be lifted directly with no reformatting.
+aigov refuses to deploy an agent file it can't read cleanly (for example, a `.yml` without `system_prompt`), rather than guessing.
+
