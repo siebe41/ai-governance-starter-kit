@@ -36,7 +36,7 @@ GLOBAL_DIR = KIT_ROOT / "global"
 TEMPLATES_DIR = KIT_ROOT / "templates"
 CONFIG_NAME = ".ai-governance.json"
 CONFIG_VERSION = 2
-CATEGORIES = ("instructions", "prompts", "agents", "skills")
+CATEGORIES = ("instructions", "prompts", "agents", "skills", "hooks", "workflows")
 
 TARGETS = {
     "copilot": "GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI)",
@@ -190,6 +190,50 @@ def sources_for(category: str, config: dict, project: Path) -> list[tuple[str, P
     return [(layer, d) for layer, d in dirs if d.is_dir()]
 
 
+def excluded(f: Path, excl: set[str]) -> bool:
+    """hooks and workflows can be excluded by filename or by stem (`lint-before-finish`)."""
+    return f.name.lower() in excl or f.stem.lower() in excl
+
+
+def collect_hooks(config: dict, project: Path) -> dict[str, list[dict]]:
+    """Builds `.claude/settings.json`'s `hooks` block from every hook fragment.
+
+    Each fragment names one `event` and one `hook` object, the exact shape Claude Code
+    expects inside `hooks.<event>`. An identical entry from two layers is kept once.
+    """
+    excl = {n.lower() for n in config.get("exclude", {}).get("hooks", [])}
+    hooks: dict[str, list[dict]] = {}
+    for _layer, d in sources_for("hooks", config, project):
+        for f in sorted(d.glob("*.json")):
+            if excluded(f, excl):
+                continue
+            try:
+                fragment = json.loads(f.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise Refusal(f"{f} isn't valid JSON ({e}). Fix the source file.")
+            event, entry = fragment.get("event"), fragment.get("hook")
+            if not event or not isinstance(entry, dict):
+                raise Refusal(f"{f} needs an `event` and a `hook` object. See global/hooks/readme.md.")
+            if entry not in hooks.setdefault(event, []):
+                hooks[event].append(entry)
+    return hooks
+
+
+def collect_workflows(config: dict, project: Path) -> list[Path]:
+    excl = {n.lower() for n in config.get("exclude", {}).get("workflows", [])}
+    return [f for _layer, d in sources_for("workflows", config, project)
+            for f in sorted(d.iterdir())
+            if f.is_file() and f.suffix.lower() in (".yml", ".yaml") and not excluded(f, excl)]
+
+
+def factory_files() -> list[Path]:
+    """The engine ships whole, readme included: it's the operator's guide to `.factory/`."""
+    source = GLOBAL_DIR / "factory"
+    if not source.is_dir():
+        return []
+    return [f for f in sorted(source.rglob("*")) if f.is_file() and "__pycache__" not in f.parts]
+
+
 def overlay_apply_to(template: str) -> str | None:
     meta_file = TEMPLATES_DIR / template / "overlay.json"
     if meta_file.exists():
@@ -302,6 +346,26 @@ def build_plan(config: dict, project: Path) -> Plan:
                 if "__pycache__" in f.parts:
                     continue
                 plan.add(f"{skill_root}/{skill.name}/{rel(f, skill)}", skill_owner, read_text(f))
+
+    # ---- hooks (Claude Code). aigov owns the whole file, so a hand-written settings.json is
+    # refused like any other file aigov didn't write, rather than merged into.
+    if "claude-code" in targets:
+        hooks = collect_hooks(config, project)
+        if hooks:
+            plan.add(".claude/settings.json", "claude-code", json.dumps({"hooks": hooks}, indent=2) + "\n")
+            plan.notes.append(".claude/settings.json is generated from hook fragments. Keep personal settings "
+                              "in .claude/settings.local.json, or exclude the hooks to manage settings.json yourself.")
+
+    # ---- workflows + factory engine (Claude Code: the shipped workflows run claude-code-action
+    # and the factory skills). Each workflow is recorded by name, so a repo's own CI beside it
+    # is never touched. The engine ships only when a factory-* workflow does.
+    if "claude-code" in targets:
+        workflows = collect_workflows(config, project)
+        for f in workflows:
+            plan.add(f".github/workflows/{f.name}", "claude-code", read_text(f))
+        if any(f.name.startswith("factory-") for f in workflows):
+            for f in factory_files():
+                plan.add(f".factory/{rel(f, GLOBAL_DIR / 'factory')}", "claude-code", read_text(f))
 
     # ---- MCP servers
     mcp_source = GLOBAL_DIR / "mcp" / "mcp-servers.json"
@@ -472,6 +536,24 @@ def detect_v1_outputs(project: Path, config: dict) -> tuple[dict[str, str], list
             src = skill_sources.get(parts[0])
             src_file = src.joinpath(*parts[1:]) if src else None
             consider(rel(f, project), bool(src_file) and src_file.exists() and read_text(src_file) == read_text(f))
+
+    # v1.6 copied workflows and the factory engine verbatim, and merged hooks into settings.json.
+    for f in collect_workflows(config, project):
+        out = project / ".github" / "workflows" / f.name
+        if out.exists():
+            consider(rel(out, project), read_text(out) == read_text(f))
+    factory_out = project / ".factory"
+    if factory_out.is_dir():
+        for f in sorted(p for p in factory_out.rglob("*") if p.is_file()):
+            src = GLOBAL_DIR / "factory" / f.relative_to(factory_out)
+            consider(rel(f, project), src.exists() and read_text(src) == read_text(f))
+    settings = project / ".claude" / "settings.json"
+    if settings.exists():
+        try:
+            consider(".claude/settings.json",
+                     json.loads(settings.read_text(encoding="utf-8")) == {"hooks": collect_hooks(config, project)})
+        except (json.JSONDecodeError, Refusal):
+            consider(".claude/settings.json", False)
 
     for path in (".vscode/mcp.json", ".copilot/mcp.json"):
         f = project / path

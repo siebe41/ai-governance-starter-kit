@@ -33,6 +33,11 @@ Everything goes under `.github/` except the VS Code MCP file.
 | `global/agents/*.yml`, `*.agent.md` | `.claude/agents/<name>.md` | [Subagents](https://code.claude.com/docs/en/sub-agents) |
 | `global/skills/<name>/` | `.claude/skills/<name>/` | [Skills](https://code.claude.com/docs/en/slash-commands) |
 | `global/mcp/mcp-servers.json` | `.mcp.json` (`mcpServers` key) | [MCP](https://code.claude.com/docs/en/mcp) |
+| `global/hooks/*.json` | `.claude/settings.json` (`hooks` key). aigov owns the whole file; it won't merge into a hand-written one. | [Hooks](https://code.claude.com/docs/en/hooks) |
+| `global/workflows/*.yml` | `.github/workflows/<name>.yml`, by name only; the repo's other workflows are never touched | [GitHub Actions](https://docs.github.com/en/actions) |
+| `global/factory/` | `.factory/`, only when a `factory-*` workflow is written (the workflows reference that path literally) | [`docs/factory-playbook.md`](/docs/factory-playbook.md) |
+
+Hooks, workflows, and the factory engine ship with this target only: the shipped workflows run `claude-code-action` and follow the factory skills, and hooks are a Claude Code feature.
 
 Domain overlays are added to `CLAUDE.md`, so they load on every Claude Code request. Claude Code documents path-specific rules too; scoping overlays with them is a possible future change.
 

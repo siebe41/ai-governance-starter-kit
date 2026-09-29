@@ -18,10 +18,14 @@
     "filesystem": {
       "command": "npx",
       "args": [
-        "-y", 
-        "@modelcontextprotocol/server-filesystem", 
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
         "${USER_HOME}/projects"
       ]
+    },
+    "graft": {
+      "command": "npx",
+      "args": ["-y", "@nanonets/graft@0.16.0", "mcp"]
     }
   }
 }

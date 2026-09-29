@@ -1,6 +1,14 @@
 # This repo is the canonical *source* of AI tooling config, not a deployment
 # target. aigov refuses to write into the kit itself; these entries are a
 # second line of defense in case generated files are copied in by hand.
+#
+# EXCEPTION -- this repo is ALSO a narrow deployment target for its own
+# factory (README.md, "This repository runs its own factory"). Those assets are
+# committed on purpose because CI has to execute them: `.github/workflows/
+# factory-*.yml`, `.factory/`, `.factory.json`, and the two factory skills
+# un-ignored below. A factory worker is told to follow
+# `.claude/skills/factory-task/`, so an ignored copy would leave the runner's
+# checkout without the procedure it was just instructed to read.
 /.github/copilot-instructions.md
 /.github/instructions/
 /.github/prompts/
@@ -8,7 +16,15 @@
 /.github/skills/
 /.vscode/mcp.json
 /.mcp.json
-/.claude/
+# `/*` rather than `/` at each level so the negations below can take effect --
+# git cannot re-include a path whose parent DIRECTORY is excluded, so
+# `!/.claude/skills/factory-task/` under a plain `/.claude/` rule would
+# silently do nothing.
+/.claude/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/factory-task/
+!/.claude/skills/factory-audit/
 /CLAUDE.md
 /LEARNINGS.md
 /.ai-governance.json

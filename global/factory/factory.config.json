@@ -1,0 +1,101 @@
+{
+  "$comment": "Default factory settings. A target repo overrides any subset in its own .factory.json at the repo root; unset keys fall back to these. See global/factory/readme.md for what each knob does and docs/factory-playbook.md for how to tune them.",
+  "version": 1,
+  "enabled": false,
+  "dry_run": true,
+  "$comment_cli": "Version of @anthropic-ai/claude-code the worker installs. 'latest' tracks upstream; pin an exact version (e.g. '2.1.272') if you want an unattended run to be reproducible and to choose when it moves.",
+  "cli_version": "latest",
+  "$comment_runner": "require_self_hosted fails a factory job that lands on a GitHub-hosted runner. Turn it on when the factory must run on your own hardware -- on a Claude subscription via CLAUDE_CODE_OAUTH_TOKEN, and without spending Actions minutes. The runner labels themselves come from the FACTORY_RUNNER repository variable, since `runs-on` is evaluated before any step can read this file.",
+  "require_self_hosted": false,
+  "$comment_host": "Host capacity guard. wip_limit counts FACTORY work; a self-hosted box shares itself with CI, a Docker swarm, and everything else on it. These thresholds are asked of the machine, so a busy host defers rather than piling on. A deferred run releases its claim and requeues -- nothing consumed, nothing escalated. Linux-only (/proc); reports ok elsewhere rather than guessing.",
+  "host": {
+    "enabled": true,
+    "max_load_per_cpu": 0.7,
+    "min_free_memory_mb": 2048,
+    "min_free_disk_gb": 10
+  },
+  "$comment_queue": "hold_labels match case-insensitively; an entry ending in * matches by prefix. Use the prefix form when the repo has a SECOND automation keyed on a label family (e.g. \"agent*\" where another pipeline triggers on any agent:* label) -- admitting such an issue would put two agents on one issue and race them to open competing pull requests.",
+  "queue": {
+    "label": "factory",
+    "hold_labels": [
+      "on-hold",
+      "pending",
+      "question",
+      "discussion",
+      "blocked",
+      "wontfix",
+      "needs-design"
+    ],
+    "escalated_label": "factory:escalated",
+    "in_flight_label": "factory:in-flight",
+    "audit_label": "factory:audit",
+    "order": "oldest-first"
+  },
+  "admission": {
+    "wip_limit": 2,
+    "max_admissions_per_tick": 1,
+    "deadline_minutes": 90,
+    "max_turns": 40,
+    "quiet_hours_utc": [],
+    "task_classes": {
+      "mechanical": {
+        "max_turns": 15,
+        "deadline_minutes": 30
+      },
+      "standard": {
+        "max_turns": 40,
+        "deadline_minutes": 90
+      },
+      "deep": {
+        "max_turns": 80,
+        "deadline_minutes": 180
+      }
+    },
+    "allowed_task_classes": [
+      "mechanical",
+      "standard"
+    ]
+  },
+  "governor": {
+    "window_hours": 5,
+    "window_turn_budget": 400,
+    "weekly_turn_budget": 4000,
+    "reserve_fraction": 0.3,
+    "default_cooldown_minutes": 300,
+    "ledger_retention_days": 30
+  },
+  "$comment_audits": "Each audit takes an optional one-line `notes` string, threaded into the auditor's prompt as repo-specific scope. Use it to say what this repo has already decided -- e.g. that certain docs are knowingly stale and only NEW drift is worth filing -- so the audit does not re-file an accepted decision every cycle, which is how this feature gets switched off.",
+  "audits": {
+    "security": {
+      "enabled": false,
+      "cron": "0 3 * * 1",
+      "task_class": "standard",
+      "max_issues": 3
+    },
+    "accessibility": {
+      "enabled": false,
+      "cron": "0 4 * * 2",
+      "task_class": "standard",
+      "max_issues": 3
+    },
+    "seo": {
+      "enabled": false,
+      "cron": "0 4 * * 3",
+      "task_class": "mechanical",
+      "max_issues": 3
+    },
+    "dependencies": {
+      "enabled": false,
+      "cron": "0 3 * * 4",
+      "task_class": "mechanical",
+      "max_issues": 2
+    },
+    "docs-drift": {
+      "enabled": false,
+      "cron": "0 4 * * 5",
+      "task_class": "mechanical",
+      "max_issues": 3
+    }
+  },
+  "state_branch": "factory-state"
+}

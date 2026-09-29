@@ -28,8 +28,10 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
    .github/instructions/*.instructions.md             .claude/commands/*.md
    .github/prompts/*.prompt.md                        .claude/agents/*.md
    .github/agents/*.agent.md                          .claude/skills/<name>/
-   .github/skills/<name>/                             .mcp.json
-   .vscode/mcp.json
+   .github/skills/<name>/                             .claude/settings.json (hooks)
+   .vscode/mcp.json                                   .mcp.json
+                                                      .github/workflows/factory-*.yml
+                                                      .factory/  (factory engine)
 ```
 
 **How aigov decides where things go:** each item goes to the one path its tool documents. Nothing is written for a tool the repo doesn't use, and nothing is written to a path no tool reads. The complete table, with a vendor-doc link for every row, is in [`TARGETS.md`](/TARGETS.md).
@@ -49,6 +51,9 @@ ai-governance-starter-kit/
 │   ├── prompts/               # code-review.md, generate-unit-tests.md, ...
 │   ├── agents/                # coordinator.yml, plan.yml, ... (or *.agent.md)
 │   ├── skills/                # test-driven-development/, learnings-log/, ...
+│   ├── hooks/                 # lint-before-finish.json (Claude Code hook fragments)
+│   ├── workflows/             # factory-conductor.yml, factory-worker.yml, factory-audit.yml, ...
+│   ├── factory/               # the autonomous-factory engine (config + Node scripts)
 │   ├── mcp/                   # mcp-servers.json (central MCP server registry)
 │   └── LEARNINGS.template.md  # Seed for each repo's mistakes/learnings log
 ├── templates/                 # 🎨 DOMAIN OVERLAYS (opt-in per repo)
@@ -147,13 +152,17 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
     "instructions": [],
     "prompts": ["caveman-mode.md"],
     "agents": ["ralph-swarm-runner.yml"],
-    "skills": []
+    "skills": [],
+    "hooks": [],
+    "workflows": []
   },
   "local_dirs": {
     "instructions": ["governance-local/instructions"],
     "prompts": [],
     "agents": [],
-    "skills": ["governance-local/skills"]
+    "skills": ["governance-local/skills"],
+    "hooks": [],
+    "workflows": []
   },
   "generated": { "...": "written by aigov; don't edit" }
 }
@@ -161,7 +170,7 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 
 * **`targets`**: the AI tools this repo uses. Change it with `migrate`, not by hand, so old files get cleaned up.
 * **`templates`**: domain overlays. Edit the list and run `sync`.
-* **`exclude`**: source filenames (folder names for `skills`) to leave out of this repo. Edit and run `sync`; files it previously wrote for them are removed.
+* **`exclude`**: source filenames to leave out of this repo (folder names for `skills`; filename or stem for `hooks` and `workflows`, e.g. `lint-before-finish`). Edit and run `sync`; files it previously wrote for them are removed. Excluding every `factory-*` workflow also removes the `.factory/` engine.
 * **`local_dirs`**: project folders merged in alongside `global/`, so project-specific rules survive kit updates. For `instructions`, this is the project's Repo layer.
 * **`generated`**: aigov's record of every file it wrote, with a fingerprint. Don't edit it.
 
@@ -169,7 +178,54 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 
 ## 🧠 Included Skills
 
-`global/skills/` ships agent skills: procedural `SKILL.md` folders that both GitHub Copilot and Claude Code load and self-trigger by description. aigov writes them to `.github/skills/<name>/` for Copilot, `.claude/skills/<name>/` for Claude Code, or once to `.claude/skills/` when a repo uses both (Copilot reads that folder too). Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; and three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from [obra/superpowers](https://github.com/obra/superpowers), MIT licensed. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+`global/skills/` ships agent skills: procedural `SKILL.md` folders that both GitHub Copilot and Claude Code load and self-trigger by description. aigov writes them to `.github/skills/<name>/` for Copilot, `.claude/skills/<name>/` for Claude Code, or once to `.claude/skills/` when a repo uses both (Copilot reads that folder too). Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from [obra/superpowers](https://github.com/obra/superpowers), MIT licensed; and `factory-task`/`factory-audit`, the run procedures behind the autonomous factory below. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+
+---
+
+## 🪝 Global Hooks
+
+`global/hooks/` ships [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — the mechanism for turning a "the model should always do X" instruction into something the harness enforces outside model context, rather than something a model has to remember on every turn. Shipped today: `lint-before-finish` (a `Stop` hook that blocks finishing on a dirty tree until `npm run lint` passes). aigov combines the fragments into one generated `.claude/settings.json` (Claude Code target only) and won't merge into a hand-written one — full behavior, the security note on vendoring shell commands, and how to add your own in [`global/hooks/readme.md`](/global/hooks/readme.md).
+
+---
+
+## 🏭 The Autonomous Factory
+
+`global/workflows/` ships GitHub Actions workflows (with the `claude-code` target) that together form a **factory**: a governed loop that turns GitHub issues into reviewable pull requests on whatever capacity a Claude subscription has spare, and keeps its own queue fed with scheduled audits. A conductor cron asks a governor whether there is headroom and dispatches at most a configured number of workers; each worker runs exactly one issue under a turn allowance and a wall-clock deadline, then opens a pull request or escalates to a human. **Nothing merges itself** — the human merge decision is the only review this work gets, and a loop that routed around it would just be an unreviewed commit stream.
+
+The governor is the interesting part, and it exists because **there is no public API that reports Claude subscription (Pro/Max) usage** — the Admin API's usage and cost reports are organisation-scoped and need an Admin API key. So it keeps its own turn ledger on an orphan branch and treats a usage-limit error observed by a real run as authoritative over its own arithmetic. Its central knob is `reserve_fraction`: the share of every budget the factory refuses to spend, held back so that sitting down at a terminal in the evening finds headroom waiting rather than a limit the overnight queue already consumed. The factory is meant to use idle capacity, not to race its owner for it.
+
+### This repository runs its own factory
+
+The kit is not just the source of the factory — it is a customer of it. This repo
+carries its own deployed copy:
+
+| Path | What it is |
+| :--- | :--- |
+| `.github/workflows/factory-*.yml` | mirror of `global/workflows/` |
+| `.factory/` | mirror of `global/factory/` |
+| `.claude/skills/factory-*/` | mirror of those two skills in `global/skills/` |
+| `.factory.json` | this repo's own settings — **not** a mirror |
+
+Same canonical-source-plus-mirror pattern as `.claude/skills/` everywhere else:
+**change `global/`, then re-deploy; never edit a mirror.** aigov refuses to write into the kit itself, so re-deploy by installing into a scratch folder (`aigov.py install --targets claude-code --templates --output <tmp>`) and copying just those paths back. The `docs-drift` audit
+is the one enabled here, which is fitting — a repo that is mostly documentation
+about its own assets is exactly where a claim and the file it describes drift
+apart quietly.
+
+It runs with `dry_run: true`, `wip_limit: 1` and `reserve_fraction: 0.5` on a
+self-hosted runner. The budget is deliberately below what a single repo would
+take, because the governor accounts **per repo**: two repos each reserving half
+still leaves the pair able to spend more than either number suggests.
+
+The whole thing ships **inert** (`enabled: false`) — deploying it starts nothing until a repo writes its own `.factory.json`. Setup, the dry-run rollout path, tuning, audits, and what to watch for in the first weeks: [`docs/factory-playbook.md`](/docs/factory-playbook.md). Category docs: [`global/workflows/readme.md`](/global/workflows/readme.md) and [`global/factory/readme.md`](/global/factory/readme.md).
+
+---
+
+## ⚙️ Global Workflows
+
+`global/workflows/` is the category for governance that runs **whether or not anyone opens an editor** — `instructions/` is a policy a model reads, `hooks/` is a rule the harness enforces during a session, and a workflow is a rule that runs on a schedule or a webhook with no session involved at all. Files deploy into `.github/workflows/` by name: a repo's own `ci.yml` beside a deployed `factory-conductor.yml` is never touched, and only the files aigov wrote are ever removed (when you exclude them).
+
+Like `hooks/`, this category's assets **execute** — here with repository credentials and a `permissions` block — so read any workflow in full before vendoring it. See [`global/workflows/readme.md`](/global/workflows/readme.md) for the security notes and how to add your own.
 
 ---
 
@@ -178,6 +234,9 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 MCP server definitions live in `global/mcp/mcp-servers.json`. aigov writes them to `.vscode/mcp.json` for Copilot in VS Code and `.mcp.json` for Claude Code. Copilot's cloud agent on github.com reads MCP servers from the repo's **Settings > Copilot > MCP servers** page instead of a file, so that one step is manual.
 
 Keep secrets out of the file by using environment-variable placeholders. aigov copies values exactly as written, and the placeholder syntax differs between tools, so write them in the form your tools expect (see [`TARGETS.md`](/TARGETS.md)).
+
+**`graft`** ([trailhq/Graft](https://github.com/trailhq/Graft), published as `@nanonets/graft`, MIT) is a codebase-context server: it serves a local, tree-sitter-built knowledge graph of a repo to any MCP-capable agent. It needs no secret and calls no external service by default — evaluated and vendored on that basis (see `CHANGELOG.md`). The entry alone only makes the tool *available*; it does nothing in a project until a developer opts in by running `npx graft init` there once, which builds the local graph and (on Claude Code) additionally wires its own skill, hooks, and statusline — none of which this kit vendors, since `graft init` manages that file directly. It's a heavier, LLM-optional alternative to `global/skills/acquire-codebase-knowledge/`'s stdlib-only scan — reach for `acquire-codebase-knowledge` when you want a zero-dependency one-time snapshot, and `graft` when you want a living, auto-refreshing graph with deeper agent integration.
+
 ---
 
 ## 🧩 Included Workflow Methodologies
@@ -190,6 +249,7 @@ Beyond the baseline security/coding/testing guardrails, `global/agents/` and `gl
 | **Swarm** | Agents | `global/agents/foreman.yml`, `swarm-scout.yml`, `swarm-builder.yml`, `swarm-auditor.yml` | Foreman decomposes a feature into independent, non-overlapping units of work and dispatches each to a Scout (research), Builder (implement), or Auditor (review/test) sub-agent running in its own branch/worktree; Foreman owns the merge. |
 | **Ralph Swarm** | Agents | `global/agents/foreman.yml`, `global/agents/ralph-swarm-runner.yml` | Foreman partitions a large `IMPLEMENTATION_PLAN.md` across several parallel Ralph loops; each Runner claims tasks off the shared plan to avoid collisions, and the Foreman reconciles/merges as runners signal done. |
 | **AI Team** | Agents / Skill | `global/agents/ai-team-producer.yml`, `ai-team-dev.yml`, `ai-team-qa.yml`, `global/skills/ai-team-orchestration/` | A small persistent team (Producer coordinates + merges, Dev implements, QA optionally tests) running Plan → Implement → Test → optional review/QA → Merge, with a project brief and sprint-plan template for durable cross-session context. |
+| **Autonomous Factory** | Workflows / Skills | `global/workflows/factory-*.yml`, `global/factory/`, `global/skills/factory-task/`, `factory-audit/` | A governed unattended loop: a cron conductor admits queued GitHub issues within a usage budget, each worker runs one issue under a turn/time cap and opens a PR or escalates, and scheduled read-only audits file new work into the same queue. Nothing merges itself. See [`docs/factory-playbook.md`](/docs/factory-playbook.md). |
 | **Spec-Driven Development** | Prompt | `global/prompts/spec-driven-development.md` | Specify → Plan → Tasks → Implement workflow (in the spirit of GitHub's Spec Kit) — the spec stays the source of truth throughout implementation. |
 | **Caveman Mode** | Prompt / Skill | `global/prompts/caveman-mode.md`, `global/skills/caveman/` (+ `caveman-commit`, `caveman-review`, `caveman-help`, `compress`) | Optional terse, low-token communication style — never applied to code correctness or user-facing deliverables. The `global/skills/` family self-triggers on Claude Code with commit/review/compress variants; the prompt covers Copilot/VS Code, which have no Skills system to self-trigger from. |
 
