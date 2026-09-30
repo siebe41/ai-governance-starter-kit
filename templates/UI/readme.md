@@ -8,7 +8,7 @@ Selected at `aigov.py install` (or by adding `"UI"` to `templates` in `.ai-gover
 
 * **`instructions/a11y.md`**: WCAG 2.2 AA accessibility standards — 38+ anti-patterns with severity, detection method, WCAG reference, and fix, plus framework-specific patterns for React/Next.js, Angular, and Vue. Adapted from [awesome-copilot.github.com/instruction/a11y](https://awesome-copilot.github.com/instruction/a11y/).
 
-This is deliberately kept out of `global/instructions/` — it's long (~700 lines) and only relevant to projects with a UI, so a backend service or CLI tool selecting `Global only` never has it concatenated into its `copilot-instructions.md`/`CLAUDE.md`. This is the pattern for any domain-specific instruction set: put it under the matching `templates/<Domain>/instructions/`, not `global/instructions/`.
+This is deliberately kept out of `global/instructions/` — it's long (~700 lines) and only relevant to projects with a UI, so a backend service or CLI tool selecting `Global only` never gets it, and a project that does select it only loads it for front-end files (via `.github/instructions/` for Copilot and `.claude/rules/` for Claude Code), never in `AGENTS.md`. This is the pattern for any domain-specific instruction set: put it under the matching `templates/<Domain>/instructions/`, not `global/instructions/`.
 
 ---
 

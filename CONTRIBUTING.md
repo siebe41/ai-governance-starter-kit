@@ -20,9 +20,9 @@ This repository is the canonical source of truth for your org's AI tooling rules
 
 ## Before Opening a PR
 
-1. **Any change under `global/` or `templates/`, or to `tooling/aigov.py`:** install into a scratch folder for every target and confirm the change lands where [`TARGETS.md`](/TARGETS.md) says it should, with no errors:
+1. **Any change under `global/` or `templates/`, or to `tooling/aigov.py`:** install into a scratch folder and confirm the change lands where [`TARGETS.md`](/TARGETS.md) says it should, with no errors:
    ```bash
-   python tooling/aigov.py install --output /tmp/aigov-check --targets copilot claude-code --templates
+   python tooling/aigov.py install --output /tmp/aigov-check --templates
    ```
 2. **Bump the version.** Update `VERSION` and add an entry to `CHANGELOG.md` for any change under `global/`, `templates/`, or `tooling/aigov.py`. Patch for wording/doc fixes, minor for additive instructions/agents/prompts/templates, major for anything that changes an existing file path, output format, or breaks a downstream project's assumptions.
 3. **New agent role:** add it to `global/agents/readme.md`'s role list *and* its "How to Use" section — an agent with no usage docs isn't done.

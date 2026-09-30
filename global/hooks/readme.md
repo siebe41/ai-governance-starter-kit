@@ -1,6 +1,6 @@
 # 🪝 Claude Code Hooks
 
-This folder contains canonical [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — small JSON files, one per hook, that `tooling/aigov.py` combines into a target repo's `.claude/settings.json` (Claude Code target only).
+This folder contains canonical [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — small JSON files, one per hook, that `tooling/aigov.py` combines into a target repo's `.claude/settings.json` (a Claude Code feature; Copilot ignores the file).
 
 A hook is how a governance rule stops being "the model has to remember this" and becomes "the harness enforces this outside model context." `global/instructions/` documents a policy in prose that a model reads and (usually) follows; a hook is the same policy encoded as a script that runs whether or not the model remembers it exists. Reach for a hook whenever an instruction is phrased as "always run X before/after Y" — that is a hook, not a reminder.
 

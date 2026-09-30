@@ -56,4 +56,4 @@ The governance kit creates `LEARNINGS.md` at the repository root once, **only if
 
 ## 🧠 Claude Code: Prefer the Skill
 
-On Claude Code, `global/skills/learnings-log/` enforces this same protocol as a self-triggering Skill — it fires at the start of every task and immediately after a correction, rather than depending on this instructions file being remembered inside a large concatenated `CLAUDE.md`. This instructions file remains the enforcement mechanism for Copilot/VS Code, which have no Skills system to self-trigger from.
+On Claude Code, `global/skills/learnings-log/` enforces this same protocol as a self-triggering Skill — it fires at the start of every task and immediately after a correction, rather than depending on this instructions file being remembered inside a large concatenated `AGENTS.md`. This instructions file remains the enforcement mechanism for Copilot/VS Code, which have no Skills system to self-trigger from.

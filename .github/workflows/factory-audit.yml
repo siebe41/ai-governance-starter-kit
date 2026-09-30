@@ -194,7 +194,7 @@ jobs:
             The rules that matter most, restated because this prompt is the one
             thing you are guaranteed to read:
 
-            0. **Read `CLAUDE.md` and `LEARNINGS.md` first**, plus the NOTES line
+            0. **Read `AGENTS.md` (or `CLAUDE.md`) and `LEARNINGS.md` first**, plus the NOTES line
                above. A repo has usually already decided things you would
                otherwise "find" — re-reporting an accepted decision every cycle
                is how this feature gets switched off.

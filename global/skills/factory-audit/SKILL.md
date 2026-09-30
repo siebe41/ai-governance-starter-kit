@@ -34,7 +34,7 @@ ninth that was real.
 
 ## Read the repo's own memory first
 
-Before looking at a single file, read `CLAUDE.md` and `LEARNINGS.md` if the repo
+Before looking at a single file, read `AGENTS.md` (or `CLAUDE.md`) and `LEARNINGS.md` if the repo
 has them, and the `NOTES` line in your prompt if one is set.
 
 This is not politeness — it is the difference between a useful audit and one

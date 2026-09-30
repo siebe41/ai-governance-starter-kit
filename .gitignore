@@ -25,6 +25,7 @@
 /.claude/skills/*
 !/.claude/skills/factory-task/
 !/.claude/skills/factory-audit/
+/AGENTS.md
 /CLAUDE.md
 /LEARNINGS.md
 /.ai-governance.json

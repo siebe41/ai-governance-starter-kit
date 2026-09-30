@@ -10,6 +10,28 @@ Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this 
 
 ---
 
+## [3.0.0]
+
+Breaking: the always-on instructions file moved, and there's no longer an AI tool to choose. Existing repos move with `python tooling/aigov.py migrate` (once).
+
+### Why
+GitHub Copilot and Claude Code both read `AGENTS.md` now (Claude Code from v2.1.277). Asking every repo which tool it uses, and keeping `.github/copilot-instructions.md` and `CLAUDE.md` as two copies of the same rules, no longer bought anything; switching or adding a tool meant a `migrate`.
+
+### Changed
+- `global/instructions/` and project `local_dirs` instructions are written to one `AGENTS.md` instead of `.github/copilot-instructions.md` and/or `CLAUDE.md`.
+- `install` no longer asks which AI tool the repo uses, and every repo gets both tools' files: Copilot's prompts, agents, overlays, and `.vscode/mcp.json`, and Claude Code's commands, agents, rules, `.mcp.json`, hooks, and factory workflows. Leave anything out with `exclude` in `.ai-governance.json`.
+- Skills are always written once to `.claude/skills/` (both tools read it); `.github/skills/` is no longer written.
+- Domain overlays for Claude Code move out of the always-on file into path-scoped `.claude/rules/<domain>-<name>.md`, using the same `overlay.json` glob as Copilot's `.github/instructions/`. The UI accessibility rules now load only for front-end files in Claude Code too.
+- `.ai-governance.json` is `version: 3`, with no `targets` key; each `generated` entry records a `tool` (`shared`, `copilot`, or `claude-code`) instead of a `target`.
+- `migrate` now moves v2 repos (as well as v1) to this layout, removing the old instructions file only if nobody edited it. It no longer takes a tool choice. `sync` on a v2 repo stops and points to `migrate`.
+- aigov warns after a run when a `CLAUDE.md`, `.claude/CLAUDE.md`, or `CLAUDE.local.md` exists, because Claude Code then reads it instead of `AGENTS.md`; the fix is an `@AGENTS.md` line in it.
+- The factory skills and audit prompt read `AGENTS.md` (or `CLAUDE.md`).
+
+### Deprecated
+- `--targets` on `install` and `migrate` is accepted and ignored, with a note, so v2 scripts keep running. Removed in the next major release.
+
+---
+
 ## [2.0.0]
 
 Breaking: output paths changed, and the entry point is now `tooling/aigov.py`. Existing repos move with `python tooling/aigov.py migrate` (once).

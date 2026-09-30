@@ -18,6 +18,6 @@ To ensure instructions are merged in a predictable sequence, prefix files with n
 
 ## 🚀 Deployment Behavior
 
-aigov combines every rule file in this folder (never this `readme.md`) with the project's own `local_dirs` rules into the always-on instructions file for each AI tool the project uses: `.github/copilot-instructions.md` for GitHub Copilot and `CLAUDE.md` for Claude Code. Domain overlays from `templates/` are written separately for Copilot, scoped to matching files. See [`TARGETS.md`](/TARGETS.md).
+aigov combines every rule file in this folder (never this `readme.md`) with the project's own `local_dirs` rules into one always-on `AGENTS.md`, which GitHub Copilot and Claude Code both read. Domain overlays from `templates/` are written separately for each tool, scoped to matching files. See [`TARGETS.md`](/TARGETS.md).
 
 Separately, the `03-learnings-log.md` protocol is backed by a seeded **`LEARNINGS.md`** file at the target repository root (see `global/LEARNINGS.template.md`). Unlike the concatenated instructions, this file is never overwritten once it exists, since it accumulates project-specific learnings over time.

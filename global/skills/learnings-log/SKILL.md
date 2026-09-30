@@ -46,4 +46,4 @@ Keep entries short and actionable — this file is a pre-flight checklist for fu
 This skill only reads and appends to `LEARNINGS.md`. It doesn't create the file proactively (that happens on first install via `tooling/aigov.py`, or on first entry if syncing hasn't happened yet), and it never rewrites or deletes an existing entry except to update it when the same lesson recurs.
 
 ---
-See `global/instructions/03-learnings-log.md` for the full protocol and `global/LEARNINGS.template.md` for how the file gets seeded into a project. This skill is the Claude-Code-native, self-triggering enforcement of that same protocol — Copilot/VS Code, which have no Skills system to self-trigger from, rely on the instructions file being present in `.github/copilot-instructions.md` instead.
+See `global/instructions/03-learnings-log.md` for the full protocol and `global/LEARNINGS.template.md` for how the file gets seeded into a project. This skill is the Claude-Code-native, self-triggering enforcement of that same protocol — Copilot/VS Code, which have no Skills system to self-trigger from, rely on the instructions file being present in `AGENTS.md` instead.

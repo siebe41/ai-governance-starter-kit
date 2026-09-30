@@ -1,8 +1,8 @@
 # ⚙️ GitHub Workflows
 
 Canonical GitHub Actions workflow files, deployed by `tooling/aigov.py`
-into a target repo's `.github/workflows/` (Claude Code target only — the shipped
-workflows run `claude-code-action`).
+into a target repo's `.github/workflows/` (the shipped workflows run Claude Code
+and ship inert; exclude them in `.ai-governance.json` to leave them out).
 
 This is the category for governance that has to run **whether or not anyone
 opens an editor**. `instructions/` is a policy a model reads; `hooks/` is a rule

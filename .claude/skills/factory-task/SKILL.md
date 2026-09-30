@@ -31,7 +31,7 @@ next tick, and the loop burns the budget on the same failure forever.
 1. **Read the issue properly**, including comments. A three-week-old issue may
    already be fixed, already be in someone's open pull request, or have been
    overtaken by a decision in the thread.
-2. **Read `CLAUDE.md` and `LEARNINGS.md`** if the repo has them. They exist
+2. **Read `AGENTS.md` (or `CLAUDE.md`) and `LEARNINGS.md`** if the repo has them. They exist
    precisely so you do not rediscover a constraint the hard way. A repo-specific
    rule beats anything in this skill.
 3. **Decide whether the issue is right.** If the fix as described would be wrong,
@@ -58,7 +58,7 @@ implies, that is an escalation, not a licence to make it.
 ## Verification
 
 Run whatever the repo runs — its linter, its type check, its tests. Read
-`CLAUDE.md` or `package.json` for the actual commands rather than guessing.
+`AGENTS.md`, `CLAUDE.md`, or `package.json` for the actual commands rather than guessing.
 
 Two absolutes:
 

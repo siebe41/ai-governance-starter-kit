@@ -13,30 +13,31 @@ A production-ready reference architecture and modular configuration framework de
 
 ## 🎯 Purpose & Architecture Overview
 
-This repository operates on a **Single Source of Truth, Multi-Target Deployment** model. You write your AI rules, prompts, agents, skills, and MCP servers once, in `global/`. `tooling/aigov.py` then writes them into each project repo, in the exact place **the AI tool that project uses** reads them from.
+This repository operates on a **Single Source of Truth** model. You write your AI rules, prompts, agents, skills, and MCP servers once, in `global/`. `tooling/aigov.py` then writes them into each project repo, in the exact places GitHub Copilot and Claude Code read them from. There's no tool to choose: the always-on rules go to one `AGENTS.md`, which both tools read, and everything else is written for both.
 
 ```text
           global/  +  templates/<Domain>/  +  the project's local_dirs
                                    |
                         tooling/aigov.py
-            (asks which AI tool; writes only for that tool)
+                                   |
+                AGENTS.md   +   .claude/skills/<name>/
+                     (read by both tools)
                                    |
           +------------------------+------------------------+
           |                                                 |
    GitHub Copilot                                     Claude Code
-   .github/copilot-instructions.md                    CLAUDE.md
-   .github/instructions/*.instructions.md             .claude/commands/*.md
-   .github/prompts/*.prompt.md                        .claude/agents/*.md
-   .github/agents/*.agent.md                          .claude/skills/<name>/
-   .github/skills/<name>/                             .claude/settings.json (hooks)
+   .github/instructions/*.instructions.md             .claude/rules/*.md
+   .github/prompts/*.prompt.md                        .claude/commands/*.md
+   .github/agents/*.agent.md                          .claude/agents/*.md
    .vscode/mcp.json                                   .mcp.json
+                                                      .claude/settings.json (hooks)
                                                       .github/workflows/factory-*.yml
                                                       .factory/  (factory engine)
 ```
 
-**How aigov decides where things go:** each item goes to the one path its tool documents. Nothing is written for a tool the repo doesn't use, and nothing is written to a path no tool reads. The complete table, with a vendor-doc link for every row, is in [`TARGETS.md`](/TARGETS.md).
+**How aigov decides where things go:** each item goes to the one path its tool documents, and where both tools read the same path (`AGENTS.md`, `.claude/skills/`) it's written once. Nothing is written to a path no tool reads. The complete table, with a vendor-doc link for every row, is in [`TARGETS.md`](/TARGETS.md).
 
-**How aigov stays safe:** it never guesses. If a choice hasn't been made, or a run would overwrite or delete a file it can't prove it wrote, it stops, explains why, and changes nothing. Every file it writes is recorded in the project's `.ai-governance.json` with a content fingerprint, and it only ever deletes files on that list that nobody has edited.
+**How aigov stays safe:** it never guesses. If a run would overwrite or delete a file it can't prove it wrote, it stops, explains why, and changes nothing. Every file it writes is recorded in the project's `.ai-governance.json` with a content fingerprint, and it only ever deletes files on that list that nobody has edited.
 
 ---
 
@@ -44,7 +45,7 @@ This repository operates on a **Single Source of Truth, Multi-Target Deployment*
 
 ```text
 ai-governance-starter-kit/
-├── TARGETS.md                 # Exactly where each item lands, per AI tool, and why
+├── TARGETS.md                 # Exactly where each item lands, and why
 ├── docs/                      # Governance playbook & architecture diagrams
 ├── global/                    # 🎯 CANONICAL SINGLE SOURCE OF TRUTH
 │   ├── instructions/          # 00-security-governance.md, 01-coding-standards.md, etc.
@@ -93,49 +94,55 @@ A submodule (`git submodule add ... vendor/ai-governance`) works the same way.
 
 | Command | When | What it does |
 | --- | --- | --- |
-| `aigov.py install` | Once per repo | Asks which AI tool(s) the repo uses and which domain overlays it wants, then writes only those files. Refuses if the repo is already installed or has v1 files. |
+| `aigov.py install` | Once per repo | Asks which domain overlays the repo wants, then writes `AGENTS.md` and both tools' files. Refuses if the repo is already installed or was set up by an older kit. |
 | `aigov.py sync` | Whenever the kit's rules change | Rewrites the same files from the current kit. Never asks questions, so it's safe in CI. Removes files you've since excluded. |
 | `aigov.py sync --check` | In CI | Changes nothing; fails if any generated file is out of date or was hand-edited. |
-| `aigov.py migrate` | Changing or adding a tool, or moving a v1 repo | Asks for the new tool choice, shows what it will write and remove, asks for confirmation, then does it. |
-| `aigov.py status` | Any time | Lists the repo's tools and the state of every file aigov wrote (`ok`, `edited`, `missing`). |
+| `aigov.py migrate` | Once, for a repo set up by the v1 or v2 kit | Shows what it will write and remove (v2's `CLAUDE.md` / `.github/copilot-instructions.md` become `AGENTS.md`), asks for confirmation, then does it. |
+| `aigov.py status` | Any time | Lists the state of every file aigov wrote (`ok`, `edited`, `missing`). |
 
-Non-interactive use (CI, scripts): pass the answers as flags, e.g. `install --targets copilot --templates UI` or `migrate --targets copilot claude-code --yes`. Without a terminal and without those flags, aigov refuses rather than assuming.
+Non-interactive use (CI, scripts): pass the answers as flags, e.g. `install --templates UI` or `migrate --yes`. Without a terminal and without those flags, aigov refuses rather than assuming. The v2 `--targets` flag is still accepted and ignored, so old scripts keep running.
 
 ### What aigov refuses to do
 
-* Run `sync` when no AI tool has been chosen.
-* Overwrite a file that exists but wasn't written by aigov (e.g. a hand-written `.github/copilot-instructions.md`). Move or rename it first.
+* Run `sync` on a repo that hasn't been installed, or that an older kit set up (run `migrate` once).
+* Overwrite a file that exists but wasn't written by aigov (e.g. a hand-written `AGENTS.md`). Move or rename it first, or fold its content into a `local_dirs` instructions folder.
 * Overwrite or delete a file aigov wrote that someone has since edited. `--force` discards those edits; it still never touches files aigov didn't write.
 * Replace v1 files whose content doesn't match what the v1 kit wrote, unless you pass `--force` after saving anything you need.
 * Delete `LEARNINGS.md`, ever.
 
 Every refusal happens before anything is written, so a refused run leaves the repo exactly as it was.
 
-### Example: `install` for a Copilot repo
+### Example: `install`
 
 ```text
-Which AI tool(s) does this repo use?
-  [1] copilot      GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI)
-  [2] claude-code  Claude Code
-  [3] both
-Your selection: 1
-
 Domain overlays to add on top of the Global rules:
   [0] none
   [1] UI
 Your selection (e.g. '1 2', Enter for none): 1
 
-GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI): 65 file(s)
+Both tools (AGENTS.md and skills are read by Copilot and Claude Code): 45 file(s)
+  [+] AGENTS.md
+  [+] .claude/skills/learnings-log/  (1 file)
+  ...
+
+GitHub Copilot (VS Code, Visual Studio, github.com, Copilot CLI): 23 file(s)
   [+] .github/agents/plan.agent.md
-  [+] .github/copilot-instructions.md
   [+] .github/instructions/ui-a11y.instructions.md
   [+] .github/prompts/code-review.prompt.md
   [+] .vscode/mcp.json
-  [+] .github/skills/learnings-log/  (1 file)
+  ...
+
+Claude Code: 38 file(s)
+  [+] .claude/agents/plan.md
+  [+] .claude/commands/code-review.md
+  [+] .claude/rules/ui-a11y.md
+  [+] .mcp.json
   ...
 
 Note: Copilot's cloud agent on github.com doesn't read MCP servers from a file. Configure them in the repo's Settings > Copilot > MCP servers.
 ```
+
+**Keeping a hand-written `CLAUDE.md`?** By default Claude Code reads `CLAUDE.md` *instead of* `AGENTS.md` when both exist. aigov warns when it sees one; put `@AGENTS.md` on its first line so Claude Code loads the kit's rules too. Reading `AGENTS.md` directly needs Claude Code v2.1.277 or later.
 
 ---
 
@@ -145,8 +152,7 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 
 ```json
 {
-  "version": 2,
-  "targets": ["copilot"],
+  "version": 3,
   "templates": ["UI"],
   "exclude": {
     "instructions": [],
@@ -168,9 +174,8 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 }
 ```
 
-* **`targets`**: the AI tools this repo uses. Change it with `migrate`, not by hand, so old files get cleaned up.
 * **`templates`**: domain overlays. Edit the list and run `sync`.
-* **`exclude`**: source filenames to leave out of this repo (folder names for `skills`; filename or stem for `hooks` and `workflows`, e.g. `lint-before-finish`). Edit and run `sync`; files it previously wrote for them are removed. Excluding every `factory-*` workflow also removes the `.factory/` engine.
+* **`exclude`**: source filenames to leave out of this repo (e.g. every `factory-*` workflow, if the repo won't run the factory) (folder names for `skills`; filename or stem for `hooks` and `workflows`, e.g. `lint-before-finish`). Edit and run `sync`; files it previously wrote for them are removed. Excluding every `factory-*` workflow also removes the `.factory/` engine.
 * **`local_dirs`**: project folders merged in alongside `global/`, so project-specific rules survive kit updates. For `instructions`, this is the project's Repo layer.
 * **`generated`**: aigov's record of every file it wrote, with a fingerprint. Don't edit it.
 
@@ -178,19 +183,19 @@ Every project's `.ai-governance.json` holds its choices plus the record of what 
 
 ## 🧠 Included Skills
 
-`global/skills/` ships agent skills: procedural `SKILL.md` folders that both GitHub Copilot and Claude Code load and self-trigger by description. aigov writes them to `.github/skills/<name>/` for Copilot, `.claude/skills/<name>/` for Claude Code, or once to `.claude/skills/` when a repo uses both (Copilot reads that folder too). Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from [obra/superpowers](https://github.com/obra/superpowers), MIT licensed; and `factory-task`/`factory-audit`, the run procedures behind the autonomous factory below. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
+`global/skills/` ships agent skills: procedural `SKILL.md` folders that both GitHub Copilot and Claude Code load and self-trigger by description. aigov writes them once to `.claude/skills/<name>/`, which both tools read. Shipped today: a `learnings-log` skill enforcing the Mistakes & Learnings Log protocol below; `ai-team-orchestration` and `acquire-codebase-knowledge` (codebase mapping with a bundled scan script); the `caveman` terse-communication family; three engineering-discipline skills (`test-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`) adapted from [obra/superpowers](https://github.com/obra/superpowers), MIT licensed; and `factory-task`/`factory-audit`, the run procedures behind the autonomous factory below. Full list, usage notes, and how to add your own in [`global/skills/readme.md`](/global/skills/readme.md).
 
 ---
 
 ## 🪝 Global Hooks
 
-`global/hooks/` ships [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — the mechanism for turning a "the model should always do X" instruction into something the harness enforces outside model context, rather than something a model has to remember on every turn. Shipped today: `lint-before-finish` (a `Stop` hook that blocks finishing on a dirty tree until `npm run lint` passes). aigov combines the fragments into one generated `.claude/settings.json` (Claude Code target only) and won't merge into a hand-written one — full behavior, the security note on vendoring shell commands, and how to add your own in [`global/hooks/readme.md`](/global/hooks/readme.md).
+`global/hooks/` ships [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks) fragments — the mechanism for turning a "the model should always do X" instruction into something the harness enforces outside model context, rather than something a model has to remember on every turn. Shipped today: `lint-before-finish` (a `Stop` hook that blocks finishing on a dirty tree until `npm run lint` passes). aigov combines the fragments into one generated `.claude/settings.json` (a Claude Code feature; Copilot ignores it) and won't merge into a hand-written one — full behavior, the security note on vendoring shell commands, and how to add your own in [`global/hooks/readme.md`](/global/hooks/readme.md).
 
 ---
 
 ## 🏭 The Autonomous Factory
 
-`global/workflows/` ships GitHub Actions workflows (with the `claude-code` target) that together form a **factory**: a governed loop that turns GitHub issues into reviewable pull requests on whatever capacity a Claude subscription has spare, and keeps its own queue fed with scheduled audits. A conductor cron asks a governor whether there is headroom and dispatches at most a configured number of workers; each worker runs exactly one issue under a turn allowance and a wall-clock deadline, then opens a pull request or escalates to a human. **Nothing merges itself** — the human merge decision is the only review this work gets, and a loop that routed around it would just be an unreviewed commit stream.
+`global/workflows/` ships GitHub Actions workflows (inert until a repo turns them on in `.factory.json`) that together form a **factory**: a governed loop that turns GitHub issues into reviewable pull requests on whatever capacity a Claude subscription has spare, and keeps its own queue fed with scheduled audits. A conductor cron asks a governor whether there is headroom and dispatches at most a configured number of workers; each worker runs exactly one issue under a turn allowance and a wall-clock deadline, then opens a pull request or escalates to a human. **Nothing merges itself** — the human merge decision is the only review this work gets, and a loop that routed around it would just be an unreviewed commit stream.
 
 The governor is the interesting part, and it exists because **there is no public API that reports Claude subscription (Pro/Max) usage** — the Admin API's usage and cost reports are organisation-scoped and need an Admin API key. So it keeps its own turn ledger on an orphan branch and treats a usage-limit error observed by a real run as authoritative over its own arithmetic. Its central knob is `reserve_fraction`: the share of every budget the factory refuses to spend, held back so that sitting down at a terminal in the evening finds headroom waiting rather than a limit the overnight queue already consumed. The factory is meant to use idle capacity, not to race its owner for it.
 
@@ -207,7 +212,7 @@ carries its own deployed copy:
 | `.factory.json` | this repo's own settings — **not** a mirror |
 
 Same canonical-source-plus-mirror pattern as `.claude/skills/` everywhere else:
-**change `global/`, then re-deploy; never edit a mirror.** aigov refuses to write into the kit itself, so re-deploy by installing into a scratch folder (`aigov.py install --targets claude-code --templates --output <tmp>`) and copying just those paths back. The `docs-drift` audit
+**change `global/`, then re-deploy; never edit a mirror.** aigov refuses to write into the kit itself, so re-deploy by installing into a scratch folder (`aigov.py install --templates --output <tmp>`) and copying just those paths back. The `docs-drift` audit
 is the one enabled here, which is fitting — a repo that is mostly documentation
 about its own assets is exactly where a claim and the file it describes drift
 apart quietly.

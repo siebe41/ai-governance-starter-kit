@@ -14,17 +14,17 @@ Two paths, depending on who you are. Both take a few minutes.
    ```bash
    python vendor/ai-governance/tooling/aigov.py install
    ```
-   It asks two questions: which AI tool the repo uses (GitHub Copilot, Claude Code, or both) and which domain overlays you want. It writes only that tool's files, to the paths in [`TARGETS.md`](/TARGETS.md), and lists every file it wrote.
+   It asks one question: which domain overlays you want. There's no AI tool to pick: it writes one `AGENTS.md` that GitHub Copilot and Claude Code both read, plus each tool's prompts, agents, and MCP config, to the paths in [`TARGETS.md`](/TARGETS.md), and lists every file it wrote.
 3. **Commit the generated files** (see "What to Commit" below).
 4. Open your editor, Copilot Chat, or Claude Code. The rules, prompts, agents, and skills are live.
 
 **Kit updated?** Run `python vendor/ai-governance/tooling/aigov.py sync`. It reuses your answers and never asks questions.
 
-**Switching tools, or adding a second one?** Run `aigov.py migrate`. It shows what it will write and remove, asks you to confirm, and never deletes a file someone edited.
+**Already have a hand-written `CLAUDE.md`?** Claude Code reads it *instead of* `AGENTS.md`. Put `@AGENTS.md` on its first line so Claude Code gets the kit's rules too (aigov reminds you after each run).
 
 **Don't want everything?** Add source filenames to `exclude` in `.ai-governance.json` (e.g. `"prompts": ["caveman-mode.md"]`) and run `sync`; the files it wrote for them are removed. To add your own rules or skills without editing the vendored kit, put them in a project folder (e.g. `governance-local/instructions/`) and list it under `local_dirs`.
 
-**Coming from v1** (`sync_configs.py`)? Run `aigov.py migrate` once. It checks that each old file is really one the v1 kit wrote before replacing it, and stops if any were edited.
+**Coming from v1 or v2** (a repo with a kit-generated `CLAUDE.md` or `.github/copilot-instructions.md`)? Run `aigov.py migrate` once. It checks that each old file is really one the kit wrote before replacing it with `AGENTS.md`, and stops if any were edited.
 
 ---
 
@@ -41,12 +41,13 @@ Two paths, depending on who you are. Both take a few minutes.
 
 ## What Gets Generated
 
-Only the files for the AI tool(s) you chose. [`TARGETS.md`](/TARGETS.md) has the full table with a vendor-doc link per row. In short:
+The same set for every repo. [`TARGETS.md`](/TARGETS.md) has the full table with a vendor-doc link per row. In short:
 
 | Tool | Files |
 | :--- | :--- |
-| GitHub Copilot | `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/`, `.github/agents/`, `.github/skills/`, `.vscode/mcp.json` |
-| Claude Code | `CLAUDE.md`, `.claude/commands/`, `.claude/agents/`, `.claude/skills/`, `.mcp.json` |
+| Both tools | `AGENTS.md`, `.claude/skills/` |
+| GitHub Copilot | `.github/instructions/`, `.github/prompts/`, `.github/agents/`, `.vscode/mcp.json` |
+| Claude Code | `.claude/rules/`, `.claude/commands/`, `.claude/agents/`, `.claude/settings.json`, `.mcp.json`, `.github/workflows/factory-*.yml`, `.factory/` |
 | Always | `.ai-governance.json` (your choices + record of generated files), `LEARNINGS.md` (seeded once, never overwritten or deleted) |
 
 ---
@@ -55,4 +56,4 @@ Only the files for the AI tool(s) you chose. [`TARGETS.md`](/TARGETS.md) has the
 
 **In your project** (the sync target): commit everything the table above lists. These aren't build artifacts you can regenerate from source at will and forget — they're the actual configuration Copilot, VS Code, and Claude Code read at runtime, and other contributors (and CI) need them present in the repo. Treat `LEARNINGS.md` as living project documentation, not disposable output — never delete it to "clean up" a re-sync.
 
-**In this canonical starter-kit repo itself**, nothing is generated: aigov refuses to write into the kit. To try a change, install into a scratch folder: `python tooling/aigov.py install --output /tmp/aigov-check --targets copilot claude-code --templates`.
+**In this canonical starter-kit repo itself**, nothing is generated: aigov refuses to write into the kit. To try a change, install into a scratch folder: `python tooling/aigov.py install --output /tmp/aigov-check --templates`.

@@ -26,6 +26,6 @@ Structuring code and projects so any AI coding assistant — Copilot, Claude Cod
 
 ## 📄 Durable Context Hints
 
-* Document architecture decisions, patterns, and conventions an assistant should follow in a durable file the assistant actually reads on every session (`.github/copilot-instructions.md` for GitHub Copilot, `CLAUDE.md` for Claude Code; this repo's governance kit writes the one for the tool it uses).
+* Document architecture decisions, patterns, and conventions an assistant should follow in a durable file the assistant actually reads on every session (`AGENTS.md`, which GitHub Copilot and Claude Code both read; this repo's governance kit writes it).
 * Use a strategic comment at the top of a genuinely complex module to state its flow or purpose in one or two lines — not to narrate what the code already makes obvious.
 * Reference existing patterns explicitly rather than describing the desired result from scratch — "follow the same pattern as `src/api/users.ts`" is a concrete, checkable instruction; "make it clean and consistent" is not.

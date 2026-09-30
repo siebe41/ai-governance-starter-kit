@@ -10,7 +10,7 @@ It is assembled from parts this kit already ships:
 | :--- | :--- |
 | Three workflows | [`global/workflows/`](../global/workflows/readme.md) → `.github/workflows/` |
 | The engine | [`global/factory/`](../global/factory/readme.md) → `.factory/` |
-| Standing rules | `global/instructions/05-autonomous-factory.md` → `CLAUDE.md` |
+| Standing rules | `global/instructions/05-autonomous-factory.md` → `AGENTS.md` |
 | Run procedures | `global/skills/factory-task/`, `factory-audit/` → `.claude/skills/` |
 | Per-repo settings | your own `.factory.json` at the repo root |
 
@@ -60,16 +60,16 @@ Two things are load-bearing and worth stating plainly:
 ### 1. Deploy the assets
 
 ```bash
-python tooling/aigov.py install --targets claude-code --output /path/to/your-repo
+python tooling/aigov.py install --output /path/to/your-repo
 ```
 
-(A repo already installed for Claude Code just needs `aigov.py sync`; one on
-Copilot only adds it with `aigov.py migrate --targets copilot claude-code`.)
-The factory runs Claude Code, so its workflows and engine ship with the
-`claude-code` target only.
+(A repo already installed just needs `aigov.py sync`; one set up by the v1 or
+v2 kit moves over once with `aigov.py migrate`.) Every install ships the
+factory; a repo that won't run it can list the `factory-*` workflows under
+`exclude.workflows`.
 
 This writes the workflows, the `.factory/` engine, the instructions into
-`CLAUDE.md`, and the two skills. **Nothing runs yet** — the shipped default is
+`AGENTS.md`, and the two skills. **Nothing runs yet** — the shipped default is
 `enabled: false`.
 
 ### 2. Provide the credential
