@@ -14,7 +14,7 @@ Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this 
 
 ### Added
 - Three opt-in CI workflows in `global/workflows/`, deployed like the factory workflows (Claude Code target):
-  - `secret-scan.yml` — runs `gitleaks` over every push and pull request to catch committed secrets.
+  - `secret-scan.yml` — runs `gitleaks` over every push and pull request to catch committed secrets. Its header comment documents swapping in Betterleaks (gitleaks' own faster successor) as a drop-in alternative, not defaulted to it because its action is third-party-maintained.
   - `check-contradictory-instructions.yml` — heuristically flags pairs of directive-shaped lines in `.github/copilot-instructions.md`, `.github/instructions/`, `CLAUDE.md`, and `AGENTS.md` that assert and then negate the same thing (e.g. "Always use X" / "Never use X").
   - `check-stale-instructions.yml` — flags markdown links and backtick-quoted paths in the same instruction files that point at a file no longer in the repo (deleted or renamed).
   - Both instruction checks are read-only heuristics scoped to the files `TARGETS.md` already documents as instruction sources, so they run as no-ops in a repo (like this one) that doesn't deploy those files, and start finding real issues the moment a project does.

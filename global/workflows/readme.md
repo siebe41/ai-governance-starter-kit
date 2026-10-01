@@ -39,7 +39,7 @@ no engine, no config file to turn them on:
 
 | File | Trigger | What it does |
 | :--- | :--- | :--- |
-| `secret-scan.yml` | every push to `main` and every pull request | Runs [`gitleaks`](https://github.com/gitleaks/gitleaks) over the diff and fails if it finds a hardcoded credential. |
+| `secret-scan.yml` | every push to `main` and every pull request | Runs [`gitleaks`](https://github.com/gitleaks/gitleaks) over the diff and fails if it finds a hardcoded credential. The workflow's header comment documents swapping in [Betterleaks](https://github.com/betterleaks/betterleaks) — gitleaks' own successor, faster and lower-noise with a compatible config format — as a drop-in alternative; it isn't the default because its GitHub Action is third-party-maintained rather than published by the tool's own org. |
 | `check-contradictory-instructions.yml` | a pull request touching `.github/copilot-instructions.md`, `.github/instructions/`, `CLAUDE.md`, or `AGENTS.md` | A heuristic scan for directive pairs that assert and then negate the same thing (`Always use tabs` / `Never use tabs`), so two rules don't silently disagree with each other. |
 | `check-stale-instructions.yml` | every pull request, every push to `main` | Scans the same instruction files for markdown links and backtick-quoted paths that point at a file no longer in the repo — the usual symptom of a rename or delete that didn't also update the doc pointing at it. |
 
