@@ -1,0 +1,128 @@
+# Contradictory-instructions check.
+#
+# An AI assistant reads every instruction file in the repo on every request;
+# it cannot tell which of two conflicting rules is the "real" one, so it will
+# follow whichever one its attention lands on that session. That is silent and
+# nondeterministic, unlike a merge conflict, so nothing forces anyone to
+# notice until behavior drifts between runs.
+#
+# This is a heuristic, not a prover: it flags pairs of directive-shaped lines
+# (`Always ...` / `Must ...` vs. `Never ...` / `Must not ...`) that share most
+# of their words, on the theory that a true contradiction restates the same
+# subject with the opposite polarity. It will miss contradictions phrased
+# differently and will occasionally flag two rules about similar-sounding but
+# distinct things — read every finding before treating it as real.
+
+name: Check Contradictory Instructions
+
+on:
+  pull_request:
+    paths:
+      - ".github/copilot-instructions.md"
+      - ".github/instructions/**"
+      - "CLAUDE.md"
+      - "AGENTS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan instruction files for contradictory directives
+        shell: python3 {0}
+        run: |
+          import glob, itertools, os, re, sys
+
+          PATTERNS = [
+              ".github/copilot-instructions.md",
+              ".github/instructions/**/*.md",
+              "CLAUDE.md",
+              "AGENTS.md",
+          ]
+          NEG_MARKERS = ["never", "do not", "don't", "must not", "should not", "shouldn't",
+                         "cannot", "can't", "avoid", "disallow", "forbid", "not allowed", "prohibited"]
+          POS_MARKERS = ["always", "must ", "should ", "require", "ensure", "need to",
+                         "have to", "mandatory"]
+          STOPWORDS = {"a", "an", "the", "to", "of", "in", "on", "for", "and", "or", "is",
+                       "are", "be", "that", "this", "it", "with", "as", "at", "by", "from"}
+          SIM_THRESHOLD = 0.6
+
+          def collect_files():
+              seen, out = set(), []
+              for pat in PATTERNS:
+                  for f in glob.glob(pat, recursive=True):
+                      rp = os.path.relpath(f)
+                      if os.path.isfile(rp) and rp not in seen:
+                          seen.add(rp)
+                          out.append(rp)
+              return sorted(out)
+
+          def classify(line_lower):
+              if any(m in line_lower for m in NEG_MARKERS):
+                  return "NEG"
+              if any(m in line_lower for m in POS_MARKERS):
+                  return "POS"
+              return None
+
+          def normalize(line_lower):
+              for m in NEG_MARKERS + POS_MARKERS:
+                  line_lower = line_lower.replace(m, " ")
+              tokens = re.findall(r"[a-z0-9]+", line_lower)
+              return {t for t in tokens if t not in STOPWORDS and len(t) > 2}
+
+          def jaccard(a, b):
+              if not a or not b:
+                  return 0.0
+              return len(a & b) / len(a | b)
+
+          def main():
+              files = collect_files()
+              if not files:
+                  print("No instruction files found to check (looked for: " + ", ".join(PATTERNS) + ").")
+                  return 0
+
+              directives = []
+              for path in files:
+                  with open(path, encoding="utf-8", errors="ignore") as fh:
+                      for i, raw in enumerate(fh, 1):
+                          stripped = re.sub(r"^\s*[-*\d.)]+\s*", "", raw.strip())
+                          stripped = re.sub(r"^\*\*|\*\*$", "", stripped)
+                          if len(stripped) < 8:
+                              continue
+                          low = stripped.lower()
+                          pol = classify(low)
+                          if not pol:
+                              continue
+                          toks = normalize(low)
+                          if len(toks) < 3:
+                              continue
+                          directives.append((path, i, pol, toks, stripped))
+
+              findings = []
+              for (f1, l1, p1, t1, r1), (f2, l2, p2, t2, r2) in itertools.combinations(directives, 2):
+                  if p1 == p2 or (f1 == f2 and l1 == l2):
+                      continue
+                  sim = jaccard(t1, t2)
+                  if sim >= SIM_THRESHOLD:
+                      findings.append((sim, f1, l1, r1, f2, l2, r2))
+
+              if findings:
+                  findings.sort(reverse=True)
+                  print(f"Found {len(findings)} potential contradiction(s) across {len(files)} instruction file(s):\n")
+                  for sim, f1, l1, r1, f2, l2, r2 in findings:
+                      print(f"::error file={f1},line={l1}::Possibly contradicts {f2}:{l2} ({sim:.0%} overlap)")
+                      print(f"  {f1}:{l1}: {r1}")
+                      print(f"  {f2}:{l2}: {r2}\n")
+                  print("This is a heuristic check (bag-of-words overlap between opposing directives). "
+                        "Review each pair; false positives are expected for nuanced wording.")
+                  return 1
+
+              print(f"No contradictory instructions found across {len(files)} file(s).")
+              return 0
+
+          sys.exit(main())

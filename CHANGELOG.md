@@ -10,6 +10,18 @@ Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this 
 
 ---
 
+## [2.1.0]
+
+### Added
+- Three opt-in CI workflows in `global/workflows/`, deployed like the factory workflows (Claude Code target):
+  - `secret-scan.yml` — runs `gitleaks` over every push and pull request to catch committed secrets.
+  - `check-contradictory-instructions.yml` — heuristically flags pairs of directive-shaped lines in `.github/copilot-instructions.md`, `.github/instructions/`, `CLAUDE.md`, and `AGENTS.md` that assert and then negate the same thing (e.g. "Always use X" / "Never use X").
+  - `check-stale-instructions.yml` — flags markdown links and backtick-quoted paths in the same instruction files that point at a file no longer in the repo (deleted or renamed).
+  - Both instruction checks are read-only heuristics scoped to the files `TARGETS.md` already documents as instruction sources, so they run as no-ops in a repo (like this one) that doesn't deploy those files, and start finding real issues the moment a project does.
+
+### Why
+The factory workflows cover the autonomous loop; most projects adopting this kit want a smaller, unconditional safety net that works without a Claude subscription. Secrets, contradictory rules, and stale file references are the three governance failures a human reviewer is least likely to notice themselves, because none of them produce a build error.
+
 ## [2.0.0]
 
 Breaking: output paths changed, and the entry point is now `tooling/aigov.py`. Existing repos move with `python tooling/aigov.py migrate` (once).

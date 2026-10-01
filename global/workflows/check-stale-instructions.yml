@@ -1,0 +1,111 @@
+# Stale-instructions check.
+#
+# Instruction files link and reference other files in the repo by path
+# (`[see the auth guide](docs/auth.md)`, `` `src/server.ts` ``) so an AI
+# assistant can jump to the right place. Those references rot the same way
+# any cross-reference does: the target gets renamed or deleted in a PR that
+# has no reason to also touch the instruction file, and nothing else notices.
+# A model told to "see `docs/auth.md`" for a file that no longer exists either
+# stalls or, worse, guesses at a replacement.
+#
+# This is a heuristic, not a prover: it only looks at markdown links and
+# backtick-quoted spans that look like a file path, and only in the
+# instruction files this kit knows about. A path mentioned in running prose
+# without either marker, or a reference to a file that is generated at
+# runtime rather than committed, won't be caught — and can be a false
+# positive here, so rephrase it if this check flags something intentional.
+
+name: Check Stale Instructions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan instruction files for references to missing files
+        shell: python3 {0}
+        run: |
+          import glob, os, re, sys
+
+          PATTERNS = [
+              ".github/copilot-instructions.md",
+              ".github/instructions/**/*.md",
+              "CLAUDE.md",
+              "AGENTS.md",
+          ]
+          LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+          CODE_RE = re.compile(r"`([^`\n]+)`")
+          PATH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-/]*\.[A-Za-z0-9]{2,6}$")
+          ABBREV = {"e.g.", "i.e.", "etc.", "vs.", "fig.", "ex.", "etc"}
+
+          def collect_files():
+              seen, out = set(), []
+              for pat in PATTERNS:
+                  for f in glob.glob(pat, recursive=True):
+                      rp = os.path.relpath(f)
+                      if os.path.isfile(rp) and rp not in seen:
+                          seen.add(rp)
+                          out.append(rp)
+              return sorted(out)
+
+          def candidate_refs(line):
+              return [m.group(1) for m in LINK_RE.finditer(line)] + [m.group(1) for m in CODE_RE.finditer(line)]
+
+          def clean(ref):
+              ref = ref.strip()
+              if not ref or ref.lower() in ABBREV:
+                  return None
+              if ref.startswith(("http://", "https://", "mailto:", "#")):
+                  return None
+              ref = ref.split("#", 1)[0].split("?", 1)[0].strip()
+              if not ref or " " in ref or ref.startswith(("<", "$", "-")):
+                  return None
+              return ref
+
+          def looks_like_path(ref):
+              return "/" in ref or bool(PATH_RE.match(ref))
+
+          def main():
+              files = collect_files()
+              if not files:
+                  print("No instruction files found to check (looked for: " + ", ".join(PATTERNS) + ").")
+                  return 0
+
+              repo_root = os.getcwd()
+              findings = []
+              for path in files:
+                  base_dir = os.path.dirname(path)
+                  with open(path, encoding="utf-8", errors="ignore") as fh:
+                      for i, raw in enumerate(fh, 1):
+                          for raw_ref in candidate_refs(raw):
+                              ref = clean(raw_ref)
+                              if not ref or not looks_like_path(ref):
+                                  continue
+                              candidates = {ref.lstrip("/")} if ref.startswith("/") else \
+                                  {ref, os.path.normpath(os.path.join(base_dir, ref))}
+                              if any(os.path.exists(os.path.join(repo_root, c)) for c in candidates):
+                                  continue
+                              findings.append((path, i, raw_ref))
+
+              if findings:
+                  print(f"Found {len(findings)} stale reference(s) across {len(files)} instruction file(s):\n")
+                  for path, i, ref in findings:
+                      print(f"::error file={path},line={i}::References '{ref}', which does not exist in the repository")
+                  print("\nIf this reference is intentional (e.g. a path created later in a workflow), "
+                        "rephrase it so it isn't picked up as a literal file path.")
+                  return 1
+
+              print(f"No stale file references found across {len(files)} file(s).")
+              return 0
+
+          sys.exit(main())

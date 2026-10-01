@@ -34,6 +34,26 @@ factory on. Excluding all three (via `.ai-governance.json`'s
 `exclude.workflows`) also suppresses the engine, so a repo that does not want a
 factory gets no stray `.factory/` directory either.
 
+The remaining three are independent, unconditional checks — no subscription,
+no engine, no config file to turn them on:
+
+| File | Trigger | What it does |
+| :--- | :--- | :--- |
+| `secret-scan.yml` | every push to `main` and every pull request | Runs [`gitleaks`](https://github.com/gitleaks/gitleaks) over the diff and fails if it finds a hardcoded credential. |
+| `check-contradictory-instructions.yml` | a pull request touching `.github/copilot-instructions.md`, `.github/instructions/`, `CLAUDE.md`, or `AGENTS.md` | A heuristic scan for directive pairs that assert and then negate the same thing (`Always use tabs` / `Never use tabs`), so two rules don't silently disagree with each other. |
+| `check-stale-instructions.yml` | every pull request, every push to `main` | Scans the same instruction files for markdown links and backtick-quoted paths that point at a file no longer in the repo — the usual symptom of a rename or delete that didn't also update the doc pointing at it. |
+
+Both instruction checks only look at the files `TARGETS.md` documents as
+instruction output (`.github/copilot-instructions.md`,
+`.github/instructions/`, `CLAUDE.md`, `AGENTS.md`), so they are a no-op in a
+repo — like this one — that authors instructions elsewhere (`global/`) rather
+than deploying them; they start finding real issues the moment a project
+installs this kit and gets those files for real. Both are **heuristics, not
+provers**: each is scoped to catch its one failure mode cheaply, not to
+understand prose, so read every finding rather than trusting the check blindly
+— see the comment at the top of each workflow for exactly what it does and
+does not catch.
+
 ---
 
 ## 🔒 A Workflow Runs Arbitrary Code With Repository Credentials
