@@ -18,7 +18,7 @@ Two paths, depending on who you are. Both take a few minutes.
 3. **Commit the generated files** (see "What to Commit" below).
 4. Open your editor, Copilot Chat, or Claude Code. The rules, prompts, agents, and skills are live.
 
-**Kit updated?** Run `python vendor/ai-governance/tooling/aigov.py sync`. It reuses your answers and never asks questions.
+**Kit updated?** Run `python vendor/ai-governance/tooling/aigov.py sync`. It reuses your answers and never asks questions. To have CI do this for you, copy the two workflows in [`examples/workflows/`](/examples/workflows/readme.md) into `.github/workflows/`: one fails pull requests when the files fall behind, and the other opens the pull request that brings them up to date.
 
 **Switching tools, or adding a second one?** Run `aigov.py migrate`. It shows what it will write and remove, asks you to confirm, and never deletes a file someone edited.
 
@@ -35,7 +35,7 @@ Two paths, depending on who you are. Both take a few minutes.
 3. Add a `CODEOWNERS` file to enforce the review bar described in `CONTRIBUTING.md` (governance sign-off required for `global/instructions/` and `global/mcp/`).
 4. Populate `templates/<Domain>/` for any domain overlays your org needs (Cloud, UI, DevOps, ...) — the kit ships the pattern, not populated content, since it's org- and stack-specific.
 5. Bump `VERSION` and add a `CHANGELOG.md` entry for every change, so project teams can tell whether they're on the latest rules — every generated instructions file is stamped with the version it came from, and `aigov.py status` shows which version wrote a repo's files.
-6. Point every project at your fork (see "Pre-Onboarding Setup: Fork vs. Subtree" in the main `README.md`) and make `python tooling/aigov.py install` part of new-project onboarding. Add `aigov.py sync --check` to CI to catch repos that fall behind or get hand-edited.
+6. Point every project at your fork (see "Pre-Onboarding Setup: Fork vs. Subtree" in the main `README.md`) and make `python tooling/aigov.py install` part of new-project onboarding. Add `aigov.py sync --check` to CI to catch repos that fall behind or get hand-edited. [`examples/workflows/`](/examples/workflows/readme.md) has a ready-made check and a scheduled sync that opens a pull request. Set the `AIGOV_KIT_REPO` organization variable to your fork once, and every project can copy both files unchanged.
 
 ---
 

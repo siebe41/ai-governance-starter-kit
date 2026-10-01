@@ -10,6 +10,18 @@ Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this 
 
 ---
 
+## [2.1.0]
+
+### Added
+- `examples/workflows/aigov-check.yml`: a CI check for project repos. It fetches the kit and runs `aigov.py sync --check` on pull requests, pushes to `main`, and a weekly schedule, and fails if the generated files are stale or were edited by hand. It's read-only and safe on fork pull requests.
+- `examples/workflows/aigov-sync.yml`: a scheduled workflow that runs `aigov.py sync` and opens or updates a pull request with the result, and closes a leftover sync pull request once the repo is current. It never merges and never passes `--force`, so a hand-edited generated file stops it and names the file.
+- Both are configured by repository or organization variables (`AIGOV_KIT_REPO`, `AIGOV_KIT_REF`, `AIGOV_VENDOR_PREFIX`), so projects copy them unchanged. Both handle a kit read straight from its repo and a kit vendored as a git subtree; in subtree mode the sync also runs `git subtree pull`. Setup, tokens, and trade-offs are in `examples/workflows/readme.md`.
+- `.github/workflows/examples-ci.yml`: runs actionlint on the examples in this repo.
+
+They're examples rather than `global/workflows/` assets because they belong in every project (Copilot ones too), while aigov deploys workflows only for `claude-code`. A deployed sync workflow would also overwrite its own file.
+
+---
+
 ## [2.0.0]
 
 Breaking: output paths changed, and the entry point is now `tooling/aigov.py`. Existing repos move with `python tooling/aigov.py migrate` (once).

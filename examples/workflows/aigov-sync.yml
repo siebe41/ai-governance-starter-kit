@@ -1,0 +1,177 @@
+# EXAMPLE: copy into a PROJECT repo's `.github/workflows/`. Don't put it in
+# `global/workflows/`; see examples/workflows/readme.md for why.
+#
+# Brings this repo's AI governance files up to date with the kit and opens a
+# pull request with the result, so a kit release reaches every repo as a pull
+# request someone reviews and merges.
+#
+# Each run fetches the kit, updates the vendored copy if there is one, runs
+# `aigov.py sync`, and if anything changed pushes it to the `aigov-sync/<base>`
+# branch and opens (or updates) a pull request. If nothing changed, it closes
+# any sync pull request left open. It never passes `--force`: when aigov refuses
+# because a generated file was edited by hand, the run fails and names the file,
+# and a person decides whether that edit is kept (moved into the kit or a
+# `local_dirs` folder) or dropped.
+#
+# The `aigov-sync/<base>` branch belongs to this workflow and is force-pushed on
+# every run that has changes. Don't push your own commits to it; push them to
+# the base branch, and the next run rebuilds the sync on top of them.
+#
+# Configure with the same variables as `aigov-check.yml`:
+#
+#   AIGOV_KIT_REPO       owner/name of your org's kit                           (required)
+#   AIGOV_KIT_REF        branch, tag or SHA to sync to                          (default: main)
+#   AIGOV_VENDOR_PREFIX  set only if the kit is vendored as a git subtree       (default: unset)
+#
+# and secrets:
+#
+#   AIGOV_KIT_TOKEN      read-only token for AIGOV_KIT_REPO, if it is private.
+#   AIGOV_SYNC_TOKEN     strongly recommended: a GitHub App token or fine-grained
+#                        PAT for THIS repo with Contents, Pull requests and
+#                        Workflows read/write. The default GITHUB_TOKEN works
+#                        only partly: a pull request it opens doesn't trigger
+#                        other workflows (so aigov-check won't run on it), it
+#                        can't push changes to `.github/workflows/` (the
+#                        claude-code target writes factory workflows there),
+#                        and it can open pull requests only if Settings >
+#                        Actions > General allows Actions to create them.
+
+name: AI governance sync
+
+on:
+  schedule:
+    - cron: "41 5 * * 1-5"   # weekdays 05:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: aigov-sync-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  AIGOV_KIT_REPO: ${{ vars.AIGOV_KIT_REPO || 'YOUR_ORG/ai-governance-starter-kit' }}
+  AIGOV_KIT_REF: ${{ vars.AIGOV_KIT_REF || 'main' }}
+  AIGOV_VENDOR_PREFIX: ${{ vars.AIGOV_VENDOR_PREFIX || '' }}
+  BASE: ${{ github.ref_name }}
+  BRANCH: aigov-sync/${{ github.ref_name }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kit location is configured
+        run: |
+          if [[ "$AIGOV_KIT_REPO" == YOUR_ORG/* ]]; then
+            echo "::error::Set the AIGOV_KIT_REPO variable (repository or organization) to your kit, e.g. acme/ai-governance."
+            exit 1
+          fi
+
+      # Full history on both: `git subtree pull` needs it, and the pull request
+      # step compares against the existing sync branch.
+      - uses: actions/checkout@v4
+        with:
+          path: project
+          fetch-depth: 0
+          token: ${{ secrets.AIGOV_SYNC_TOKEN || github.token }}
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.AIGOV_KIT_REPO }}
+          ref: ${{ env.AIGOV_KIT_REF }}
+          path: kit
+          fetch-depth: 0
+          token: ${{ secrets.AIGOV_KIT_TOKEN || github.token }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Configure git
+        run: |
+          git -C project config user.name "github-actions[bot]"
+          git -C project config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Pulls from the local kit checkout, so a private kit is read with
+      # AIGOV_KIT_TOKEN and the project token never needs access to it. The
+      # squash commit still records the upstream commit, so a later manual
+      # `git subtree pull` from the kit's URL works as usual.
+      - name: Update the vendored kit
+        if: env.AIGOV_VENDOR_PREFIX != ''
+        run: |
+          if ! git -C project subtree pull --prefix "$AIGOV_VENDOR_PREFIX" "$GITHUB_WORKSPACE/kit" HEAD --squash \
+               -m "Update $AIGOV_VENDOR_PREFIX to $AIGOV_KIT_REPO@$(git -C kit rev-parse --short HEAD)"; then
+            echo "::error::git subtree pull failed, usually because files under $AIGOV_VENDOR_PREFIX were edited in this repo. Don't edit the vendored kit; put project rules in local_dirs."
+            exit 1
+          fi
+
+      - name: Sync generated files
+        run: |
+          if [ -n "$AIGOV_VENDOR_PREFIX" ]; then
+            aigov="project/$AIGOV_VENDOR_PREFIX/tooling/aigov.py"
+          else
+            aigov="kit/tooling/aigov.py"
+          fi
+          set -o pipefail
+          if ! python "$aigov" sync --output project 2>&1 | tee "$RUNNER_TEMP/aigov-sync.log"; then
+            echo "::error::aigov stopped without changing anything (reason above). A person has to resolve it; this workflow never passes --force."
+            exit 1
+          fi
+
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ secrets.AIGOV_SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          kit_version="$(cat kit/VERSION 2>/dev/null || echo unknown)"
+          kit_sha="$(git -C kit rev-parse --short HEAD)"
+          cd project
+
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Sync AI governance files with $AIGOV_KIT_REPO v$kit_version ($kit_sha)"
+          fi
+
+          if [ "$(git rev-list --count "origin/$BASE..HEAD")" = 0 ]; then
+            echo "Already up to date with $AIGOV_KIT_REPO@$kit_sha."
+            if [ -n "$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[].number')" ]; then
+              gh pr close "$BRANCH" --delete-branch \
+                --comment "$BASE is already up to date with $AIGOV_KIT_REPO@$kit_sha, so this sync isn't needed."
+            fi
+            exit 0
+          fi
+
+          # Skip the push when the branch already holds exactly this content,
+          # so a quiet day doesn't re-run CI on an unchanged pull request.
+          if [ "$(git rev-parse -q --verify "origin/$BRANCH^{tree}" || true)" = "$(git rev-parse "HEAD^{tree}")" ]; then
+            echo "$BRANCH already has this content."
+          else
+            git push -q --force origin "HEAD:refs/heads/$BRANCH"
+          fi
+
+          {
+            echo "Brings this repo's AI governance files up to date with \`$AIGOV_KIT_REPO\` v$kit_version (\`$kit_sha\`, from \`$AIGOV_KIT_REF\`)."
+            echo
+            echo "Opened by the AI governance sync workflow. What changed and why is in the kit's \`CHANGELOG.md\`. Review it like any change to the rules your AI tools follow."
+            echo
+            if [ -n "$AIGOV_VENDOR_PREFIX" ]; then
+              echo "Also updates the vendored kit in \`$AIGOV_VENDOR_PREFIX\`."
+              echo
+            fi
+            echo "Generated files written (\`+\`) or removed (\`-\`) by aigov:"
+            echo
+            echo '```text'
+            grep -E '^ +\[[+-]\] ' "$RUNNER_TEMP/aigov-sync.log" || echo '(none)'
+            echo '```'
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "Sync AI governance files (kit v$kit_version)" --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create --base "$BASE" --head "$BRANCH" \
+              --title "Sync AI governance files (kit v$kit_version)" --body-file "$RUNNER_TEMP/pr-body.md"
+          fi

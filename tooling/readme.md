@@ -12,6 +12,8 @@ python tooling/aigov.py migrate   --output path/to/project   # change/add tools,
 python tooling/aigov.py status    --output path/to/project   # what's installed, per file
 ```
 
+For CI, [`examples/workflows/`](/examples/workflows/readme.md) has a check workflow (`sync --check` against a freshly fetched kit) and a scheduled sync workflow that opens a pull request.
+
 `--output` defaults to the current folder. For scripts and CI, pass answers as flags: `--targets copilot claude-code`, `--templates UI` (or `--templates` alone for none), and `--yes` for `migrate`.
 
 Where each item lands, and why, is in [`TARGETS.md`](/TARGETS.md). What aigov refuses to do is in the main `README.md` under "What aigov refuses to do".

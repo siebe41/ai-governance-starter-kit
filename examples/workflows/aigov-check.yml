@@ -1,0 +1,103 @@
+# EXAMPLE: copy into a PROJECT repo's `.github/workflows/`. Don't put it in
+# `global/workflows/`; see examples/workflows/readme.md for why.
+#
+# Fails when this repo's AI governance files are stale or hand-edited:
+#
+#   * stale: the kit has changed since this repo last ran `aigov.py sync`, so
+#     the instructions, prompts, agents, skills or MCP config the AI tools read
+#     here are no longer the org's current rules.
+#   * hand-edited: someone changed a file aigov wrote. That edit is lost on the
+#     next sync, so it belongs in the kit or in a `local_dirs` folder instead.
+#
+# It fetches the kit fresh on every run and runs `aigov.py sync --check`, which
+# changes nothing. The weekly schedule catches a kit update in a repo where
+# nobody has opened a pull request. Pair it with `aigov-sync.yml`, which opens
+# the pull request that fixes a stale result.
+#
+# Configure with repository or organization variables (Settings > Secrets and
+# variables > Actions > Variables), so this file needs no edits:
+#
+#   AIGOV_KIT_REPO       owner/name of your org's kit, e.g. acme/ai-governance  (required)
+#   AIGOV_KIT_REF        branch, tag or SHA to compare against                  (default: main)
+#   AIGOV_VENDOR_PREFIX  set only if the kit is vendored as a git subtree,
+#                        e.g. vendor/ai-governance                              (default: unset)
+#
+# and, only if the kit repo is private, a secret:
+#
+#   AIGOV_KIT_TOKEN      read-only token for AIGOV_KIT_REPO. Not passed to pull
+#                        requests from forks, so those can't read a private kit.
+
+name: AI governance check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AIGOV_KIT_REPO: ${{ vars.AIGOV_KIT_REPO || 'YOUR_ORG/ai-governance-starter-kit' }}
+  AIGOV_KIT_REF: ${{ vars.AIGOV_KIT_REF || 'main' }}
+  AIGOV_VENDOR_PREFIX: ${{ vars.AIGOV_VENDOR_PREFIX || '' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kit location is configured
+        run: |
+          if [[ "$AIGOV_KIT_REPO" == YOUR_ORG/* ]]; then
+            echo "::error::Set the AIGOV_KIT_REPO variable (repository or organization) to your kit, e.g. acme/ai-governance."
+            exit 1
+          fi
+
+      # Project and kit are checked out side by side, so neither is inside the
+      # other: aigov refuses to write into the kit, and a kit copy inside the
+      # project would show up as untracked files.
+      - uses: actions/checkout@v4
+        with:
+          path: project
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.AIGOV_KIT_REPO }}
+          ref: ${{ env.AIGOV_KIT_REF }}
+          path: kit
+          token: ${{ secrets.AIGOV_KIT_TOKEN || github.token }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # With a vendored kit, the project's own copy is the one it was synced
+      # from, so this step checks the generated files against that copy and the
+      # next step checks the copy against upstream. Otherwise there is no copy,
+      # and the generated files are checked against upstream directly.
+      - name: Generated files match the kit and weren't edited by hand
+        run: |
+          if [ -n "$AIGOV_VENDOR_PREFIX" ]; then
+            aigov="project/$AIGOV_VENDOR_PREFIX/tooling/aigov.py"
+            local_cmd="python $AIGOV_VENDOR_PREFIX/tooling/aigov.py sync"
+          else
+            aigov="kit/tooling/aigov.py"
+            local_cmd="python <your kit clone>/tooling/aigov.py sync --output ."
+          fi
+          if ! python "$aigov" sync --check --output project; then
+            echo "::error::AI governance files need attention; the log above names each one. 'Out of date': merge the AI governance sync pull request, or run '$local_cmd'. 'Edited by hand': move the change into the kit or a local_dirs folder, then undo it here."
+            exit 1
+          fi
+
+      - name: Vendored kit matches upstream
+        if: env.AIGOV_VENDOR_PREFIX != ''
+        run: |
+          if ! diff -rq --exclude=.git --exclude=__pycache__ kit "project/$AIGOV_VENDOR_PREFIX"; then
+            echo "::error::$AIGOV_VENDOR_PREFIX differs from $AIGOV_KIT_REPO@$AIGOV_KIT_REF (files listed above). Run the AI governance sync workflow to update it. Don't edit the vendored kit; put project rules in local_dirs."
+            exit 1
+          fi

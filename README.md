@@ -58,6 +58,8 @@ ai-governance-starter-kit/
 │   └── LEARNINGS.template.md  # Seed for each repo's mistakes/learnings log
 ├── templates/                 # 🎨 DOMAIN OVERLAYS (opt-in per repo)
 │   └── UI/                    # instructions/a11y.md (WCAG 2.2 AA) + overlay.json (applyTo)
+├── examples/
+│   └── workflows/             # aigov-check.yml + aigov-sync.yml: copy into a project's CI
 └── tooling/
     ├── aigov.py               # 🛠️ install / sync / migrate / status
     └── sync_configs.py        # Deprecated v1 entry point; forwards to `aigov.py sync`
@@ -98,6 +100,8 @@ A submodule (`git submodule add ... vendor/ai-governance`) works the same way.
 | `aigov.py sync --check` | In CI | Changes nothing; fails if any generated file is out of date or was hand-edited. |
 | `aigov.py migrate` | Changing or adding a tool, or moving a v1 repo | Asks for the new tool choice, shows what it will write and remove, asks for confirmation, then does it. |
 | `aigov.py status` | Any time | Lists the repo's tools and the state of every file aigov wrote (`ok`, `edited`, `missing`). |
+
+**Keeping projects current in CI:** [`examples/workflows/`](/examples/workflows/readme.md) has two workflows to copy into a project repo. `aigov-check.yml` fetches the kit and fails a pull request when the generated files are stale or hand-edited. `aigov-sync.yml` runs `sync` on a schedule and opens a pull request with the result. Both handle a kit read from its own repo and one vendored as a subtree.
 
 Non-interactive use (CI, scripts): pass the answers as flags, e.g. `install --targets copilot --templates UI` or `migrate --targets copilot claude-code --yes`. Without a terminal and without those flags, aigov refuses rather than assuming.
 

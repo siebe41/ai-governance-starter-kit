@@ -1,0 +1,37 @@
+# Lints the example workflows in `examples/workflows/`.
+#
+# Nothing deploys these. People copy them into their own repos by hand, so a
+# broken example spreads as quietly as a broken `global/workflows/` file does
+# (see factory-ci.yml for how that went once). This is a kit-only workflow with
+# no canonical source in `global/workflows/`, so the mirror check there skips it.
+
+name: Examples CI
+
+on:
+  pull_request:
+    paths:
+      - "examples/workflows/**"
+      - ".github/workflows/examples-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "examples/workflows/**"
+      - ".github/workflows/examples-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # actionlint also runs shellcheck (preinstalled on GitHub-hosted runners)
+      # over every `run:` block.
+      - name: Lint example workflows
+        run: |
+          set -euo pipefail
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color examples/workflows/*.yml .github/workflows/examples-ci.yml
