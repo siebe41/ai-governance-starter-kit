@@ -10,6 +10,11 @@ Every change to `global/`, `templates/`, or `tooling/aigov.py` should bump this 
 
 ---
 
+## [2.0.1]
+
+### Fixed
+* `global/workflows/readme.md`: said "three" workflows (listed four, shipped five); now lists all five and documents `factory-ci.yml`, including that it deploys downstream and how to exclude it. Docs only.
+
 ## [2.0.0]
 
 Breaking: output paths changed, and the entry point is now `tooling/aigov.py`. Existing repos move with `python tooling/aigov.py migrate` (once).
