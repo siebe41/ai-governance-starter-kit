@@ -13,9 +13,10 @@ schedule, on a webhook, or on a push, with no session involved at all.
 
 ## 📄 Included Workflows
 
-The three files here are one system — the **factory**: a governed loop that
+The five files here are one system — the **factory**: a governed loop that
 turns GitHub issues into reviewable pull requests on whatever capacity your
 Claude subscription has spare, and files its own work through scheduled audits.
+Four do the work; `factory-ci.yml` checks the other four.
 
 | File | Trigger | What it does |
 | :--- | :--- | :--- |
@@ -23,6 +24,7 @@ Claude subscription has spare, and files its own work through scheduled audits.
 | `factory-worker.yml` | dispatched by the conductor | Runs **one** issue under a turn allowance and a deadline, then opens a pull request or escalates. Records the outcome in the ledger. |
 | `factory-audit.yml` | daily cron | Runs a read-only audit (security, accessibility, SEO, dependencies, docs drift) and files findings as issues into the same queue. Changes no code. |
 | `factory-retro.yml` | weekly cron | Joins the ledger with what GitHub says happened to those issues and publishes a report. `contents: read` + `issues: read` only — it **reports, it never tunes**. |
+| `factory-ci.yml` | pull request touching `global/workflows/**`, `global/factory/**`, `.github/workflows/**` or `.factory/**`; push to `main` touching `global/workflows/**` | Runs `actionlint` over the workflows, so one GitHub cannot parse is caught before it ships. Runs no model. It checks this kit's own source, but because aigov deploys every `factory-*` workflow it is copied downstream too, where its path filters rarely match. Exclude it if you do not want it. |
 
 They depend on the engine in [`global/factory/`](../factory/readme.md), which
 aigov deploys to `.factory/` whenever any `factory-*` workflow ships. Full
@@ -30,7 +32,8 @@ setup, tuning, and operating notes: [`docs/factory-playbook.md`](../../docs/fact
 
 **They ship inert.** The default config sets `enabled: false`, so deploying them
 into a repo starts nothing until someone writes a `.factory.json` that turns the
-factory on. Excluding all three (via `.ai-governance.json`'s
+factory on. Excluding all five (`factory-conductor`, `factory-worker`,
+`factory-audit`, `factory-retro` and `factory-ci`, via `.ai-governance.json`'s
 `exclude.workflows`) also suppresses the engine, so a repo that does not want a
 factory gets no stray `.factory/` directory either.
 
