@@ -13,7 +13,7 @@ schedule, on a webhook, or on a push, with no session involved at all.
 
 ## 📄 Included Workflows
 
-The three files here are one system — the **factory**: a governed loop that
+The five files here are one system — the **factory**: a governed loop that
 turns GitHub issues into reviewable pull requests on whatever capacity your
 Claude subscription has spare, and files its own work through scheduled audits.
 
@@ -23,6 +23,7 @@ Claude subscription has spare, and files its own work through scheduled audits.
 | `factory-worker.yml` | dispatched by the conductor | Runs **one** issue under a turn allowance and a deadline, then opens a pull request or escalates. Records the outcome in the ledger. |
 | `factory-audit.yml` | daily cron | Runs a read-only audit (security, accessibility, SEO, dependencies, docs drift) and files findings as issues into the same queue. Changes no code. |
 | `factory-retro.yml` | weekly cron | Joins the ledger with what GitHub says happened to those issues and publishes a report. `contents: read` + `issues: read` only — it **reports, it never tunes**. |
+| `factory-ci.yml` | PR / push to `main` touching `global/workflows/`, `global/factory/`, `.github/workflows/` or `.factory/`; manual | Runs `actionlint` over the workflows so one that GitHub cannot parse is caught before it ships. `contents: read` only. It is a check on the factory itself and **ships downstream with the rest** (aigov deploys every `factory-*` workflow); a repo that does not want it can add it to `exclude.workflows`. |
 
 They depend on the engine in [`global/factory/`](../factory/readme.md), which
 aigov deploys to `.factory/` whenever any `factory-*` workflow ships. Full
@@ -30,8 +31,8 @@ setup, tuning, and operating notes: [`docs/factory-playbook.md`](../../docs/fact
 
 **They ship inert.** The default config sets `enabled: false`, so deploying them
 into a repo starts nothing until someone writes a `.factory.json` that turns the
-factory on. Excluding all three (via `.ai-governance.json`'s
-`exclude.workflows`) also suppresses the engine, so a repo that does not want a
+factory on. Excluding all five (via `.ai-governance.json`'s
+`exclude.workflows`; leaving any one behind keeps the engine deploying) also suppresses the engine, so a repo that does not want a
 factory gets no stray `.factory/` directory either.
 
 ---
