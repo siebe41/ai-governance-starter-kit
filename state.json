@@ -2,48 +2,18 @@
   "version": 1,
   "runs": [
     {
-      "issue": 6,
-      "run_id": "34988432669",
-      "task_class": "mechanical",
-      "outcome": "failed",
-      "turns": 15,
-      "turns_estimated": true,
-      "cost_usd": null,
-      "started_at": "2026-09-15T15:26:10.623Z",
-      "finished_at": "2026-09-15T15:26:33.135Z"
-    },
-    {
-      "issue": 6,
-      "run_id": "34995277670",
-      "task_class": "mechanical",
-      "outcome": "failed",
-      "turns": 15,
-      "turns_estimated": true,
-      "cost_usd": null,
-      "started_at": "2026-09-15T16:29:01.756Z",
-      "finished_at": "2026-09-15T16:29:20.359Z"
-    },
-    {
-      "issue": 6,
-      "run_id": "35007812827",
-      "task_class": "mechanical",
-      "outcome": "failed",
-      "turns": 15,
-      "turns_estimated": true,
-      "cost_usd": null,
-      "started_at": "2026-09-15T18:29:31.265Z",
-      "finished_at": "2026-09-15T18:31:16.426Z"
-    }
-  ],
-  "in_flight": [
-    {
       "issue": 15,
-      "run_id": "44667327068",
+      "run_id": "44667346578",
       "task_class": "standard",
+      "outcome": "landed",
+      "turns": 9,
+      "turns_estimated": false,
+      "cost_usd": 0.0857694,
       "started_at": "2026-11-20T03:23:02.941Z",
-      "deadline_at": "2026-11-20T04:53:02.941Z"
+      "finished_at": "2026-11-20T03:23:41.618Z"
     }
   ],
+  "in_flight": [],
   "limit": null,
   "paused": false,
   "paused_reason": null
