@@ -13,7 +13,7 @@ schedule, on a webhook, or on a push, with no session involved at all.
 
 ## 📄 Included Workflows
 
-The three files here are one system — the **factory**: a governed loop that
+The five files here are one system — the **factory**: a governed loop that
 turns GitHub issues into reviewable pull requests on whatever capacity your
 Claude subscription has spare, and files its own work through scheduled audits.
 
@@ -23,14 +23,23 @@ Claude subscription has spare, and files its own work through scheduled audits.
 | `factory-worker.yml` | dispatched by the conductor | Runs **one** issue under a turn allowance and a deadline, then opens a pull request or escalates. Records the outcome in the ledger. |
 | `factory-audit.yml` | daily cron | Runs a read-only audit (security, accessibility, SEO, dependencies, docs drift) and files findings as issues into the same queue. Changes no code. |
 | `factory-retro.yml` | weekly cron | Joins the ledger with what GitHub says happened to those issues and publishes a report. `contents: read` + `issues: read` only — it **reports, it never tunes**. |
+| `factory-ci.yml` | PR touching `global/workflows/**`, `global/factory/**`, `.github/workflows/**` or `.factory/**`; push to `main` touching `global/workflows/**`; manual | Lints every workflow with actionlint, checks canonical workflows against their `.github/workflows/` mirrors, and runs the engine self-tests. Runs on `ubuntu-latest`, not the factory's own runners. |
 
 They depend on the engine in [`global/factory/`](../factory/readme.md), which
 aigov deploys to `.factory/` whenever any `factory-*` workflow ships. Full
 setup, tuning, and operating notes: [`docs/factory-playbook.md`](../../docs/factory-playbook.md).
 
+`factory-ci.yml` exists to guard *this* kit, whose `global/workflows/` is copied
+into other repos. Because aigov deploys every `factory-*` workflow, it also lands
+downstream, where it lints that repo's `.github/workflows/` and `.factory/` on
+PRs. That is harmless but optional: exclude it with `exclude.workflows:
+["factory-ci"]` if you don't want it. Excluding only some `factory-*` files
+keeps the `.factory/` engine deploying.
+
 **They ship inert.** The default config sets `enabled: false`, so deploying them
 into a repo starts nothing until someone writes a `.factory.json` that turns the
-factory on. Excluding all three (via `.ai-governance.json`'s
+factory on. (`factory-ci.yml` is the exception: it has no config switch and runs
+on any matching PR.) Excluding all five (via `.ai-governance.json`'s
 `exclude.workflows`) also suppresses the engine, so a repo that does not want a
 factory gets no stray `.factory/` directory either.
 
