@@ -167,7 +167,15 @@
       "finished_at": "2026-11-20T23:20:52.830Z"
     }
   ],
-  "in_flight": [],
+  "in_flight": [
+    {
+      "issue": 15,
+      "run_id": "44845238460",
+      "task_class": "standard",
+      "started_at": "2026-11-21T00:39:16.700Z",
+      "deadline_at": "2026-11-21T02:09:16.700Z"
+    }
+  ],
   "limit": {
     "hit_at": "2026-11-20T12:26:41.540Z",
     "resets_at": "2026-11-20T17:26:41.540Z",
