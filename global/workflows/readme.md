@@ -13,7 +13,7 @@ schedule, on a webhook, or on a push, with no session involved at all.
 
 ## 📄 Included Workflows
 
-The three files here are one system — the **factory**: a governed loop that
+The five files here are one system — the **factory**: a governed loop that
 turns GitHub issues into reviewable pull requests on whatever capacity your
 Claude subscription has spare, and files its own work through scheduled audits.
 
@@ -30,9 +30,10 @@ setup, tuning, and operating notes: [`docs/factory-playbook.md`](../../docs/fact
 
 **They ship inert.** The default config sets `enabled: false`, so deploying them
 into a repo starts nothing until someone writes a `.factory.json` that turns the
-factory on. Excluding all three (via `.ai-governance.json`'s
-`exclude.workflows`) also suppresses the engine, so a repo that does not want a
-factory gets no stray `.factory/` directory either.
+factory on. Excluding all five (via `.ai-governance.json`'s
+`exclude.workflows`, including `factory-retro` and `factory-ci`) also suppresses
+the engine, so a repo that does not want a factory gets no stray `.factory/`
+directory. Leaving any one `factory-*` workflow in place keeps `.factory/`.
 
 ---
 
