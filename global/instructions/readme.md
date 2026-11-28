@@ -13,6 +13,7 @@ To ensure instructions are merged in a predictable sequence, prefix files with n
 * **`02-testing-standards.md`**: Unit and integration test expectations, isolation rules, and coverage thresholds.
 * **`03-learnings-log.md`**: Protocol requiring AI assistants to read and append to a per-repo `LEARNINGS.md` file so mistakes, corrections, and gotchas are never repeated.
 * **`04-context-engineering.md`**: Project structure and coding-pattern guidance (paths, types, naming, colocated code) that helps any AI assistant — not just one vendor's — give better suggestions and make better changes.
+* **`05-autonomous-factory.md`**: Stricter rules for unattended AI runs (scheduled jobs, queue workers, audit sweeps) — e.g. nothing merges itself. Mandatory where an autonomous loop is enabled.
 
 ---
 
