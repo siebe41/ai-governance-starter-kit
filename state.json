@@ -1034,17 +1034,20 @@
       "cost_usd": 0.049226900000000004,
       "started_at": "2026-11-28T12:24:51.277Z",
       "finished_at": "2026-11-28T12:25:18.653Z"
-    }
-  ],
-  "in_flight": [
+    },
     {
       "issue": 75,
-      "run_id": "46149101621",
+      "run_id": "46149116368",
       "task_class": "standard",
+      "outcome": "landed",
+      "turns": 4,
+      "turns_estimated": false,
+      "cost_usd": 0.0414418,
       "started_at": "2026-11-28T13:20:18.117Z",
-      "deadline_at": "2026-11-28T14:50:18.117Z"
+      "finished_at": "2026-11-28T13:20:51.542Z"
     }
   ],
+  "in_flight": [],
   "limit": {
     "hit_at": "2026-11-23T15:21:34.816Z",
     "resets_at": "2026-11-23T20:21:34.816Z",
